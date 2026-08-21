@@ -1,0 +1,8 @@
+# Your queue, your paths, your quarantined files. None of it belongs in git.
+data/
+
+__pycache__/
+*.pyc
+.DS_Store
+.backup/
+.letta/

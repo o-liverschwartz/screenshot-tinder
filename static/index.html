@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Screenshot Triage</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #FAFBFC;
+    --card:   #FFFFFF;
+    --stage:  #DCE2EA;
+    --ink:    #14171C;
+    --muted:  #828893;
+    --line:   #E6EAEF;
+    --accent: #4A86DB;
+    --accent-ink: #2C5FA8;
+    --accent-soft: rgba(74,134,219,.10);
+    --ui:   "Outfit", "Avenir Next", sans-serif;
+    --mono: "DM Mono", ui-monospace, Menlo, monospace;
+    --dock-shadow: 0 -1px 0 var(--line), 0 -14px 34px -18px rgba(20,19,26,.28);
+  }
+  * { box-sizing: border-box; }
+  html { height: 100%; }
+  body {
+    margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--ground); color: var(--ink);
+    font-family: var(--ui); -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: var(--ui); cursor: pointer; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  /* ============ masthead ============ */
+  .top {
+    flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 22px; border-bottom: 1px solid var(--line); background: var(--card);
+  }
+  .wordmark { font-size: 15px; font-weight: 600; letter-spacing: -.02em; margin: 0; }
+  .wordmark b { font-weight: 700; color: var(--accent-ink); }
+  .topright { display: flex; align-items: center; gap: 14px; }
+  .vault { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: right; line-height: 1.5; }
+  .vault b { color: var(--ink); font-weight: 500; }
+
+  /* ============ the scrolling middle ============ */
+  main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  main.scrolls { overflow-y: auto; }
+  .wrap { width: 100%; max-width: 620px; margin: 0 auto; padding: 22px; }
+
+  /* ============ image stage: the part that breathes ============ */
+  .stage {
+    flex: 1; min-height: 0; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    padding: 22px 24px 16px; background: var(--stage);
+  }
+  .shot {
+    max-width: 100%; max-height: 100%; display: block; border-radius: 10px;
+    background: var(--card); border: 1px solid rgba(20,19,26,.14);
+    box-shadow: 0 2px 4px rgba(20,19,26,.06), 0 22px 50px -22px rgba(20,19,26,.42);
+    object-fit: contain;
+    animation: land .34s cubic-bezier(.2,.8,.3,1);
+  }
+  @keyframes land { from { opacity: 0; transform: scale(.975) translateY(7px); } }
+  .flyer {
+    width: 100%; height: 100%; min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .3s cubic-bezier(.35,.9,.4,1), opacity .3s ease;
+  }
+  .flyer.go-remove { transform: translateX(-64vw) rotate(-13deg); opacity: 0; }
+  .flyer.go-keep   { transform: translateX(64vw) rotate(13deg);   opacity: 0; }
+  .flyer.go-star   { transform: translateY(-38vh) scale(1.05);    opacity: 0; }
+  .flyer.go-move   { transform: translateY(42vh) scale(.86);      opacity: 0; }
+  .noshot {
+    font-family: var(--mono); font-size: 12.5px; color: var(--muted); text-align: center;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 46px 34px; line-height: 1.7;
+  }
+  .noshot .ext { display: block; font-size: 26px; font-weight: 600; color: var(--ink); font-family: var(--ui); margin-bottom: 6px; }
+
+  /* ============ the dock: everything you need, always in the same place ============ */
+  .dock {
+    flex: none; background: var(--card); box-shadow: var(--dock-shadow);
+    padding: 13px 22px 14px;
+  }
+  .dock-in { max-width: 620px; margin: 0 auto; }
+
+  .name { font-size: 17px; font-weight: 600; letter-spacing: -.015em; line-height: 1.3; word-break: break-word; }
+  .name .star-on { color: var(--accent); margin-left: 5px; }
+  .name input {
+    width: 100%; font: inherit; background: var(--ground); color: var(--ink);
+    border: 1.5px solid var(--accent); border-radius: 9px; padding: 7px 10px;
+  }
+  .name input:focus { outline: none; }
+  .facts {
+    font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* circular actions, Hinge-style, sitting in their own row */
+  .acts { display: flex; align-items: center; justify-content: center; gap: 26px; margin: 12px 0 40px; }
+  .act {
+    width: 54px; height: 54px; border-radius: 50%; border: 1.5px solid var(--line);
+    background: var(--card); display: grid; place-items: center; position: relative;
+    transition: transform .13s cubic-bezier(.3,1.4,.5,1), border-color .15s, background .15s;
+  }
+  .act:hover { border-color: var(--ink); }
+  .act:active { transform: scale(.9); }
+  .act svg { width: 21px; height: 21px; stroke-width: 1.9; }
+  .act.keep { border-color: var(--accent); background: var(--accent); color: #fff; width: 60px; height: 60px; }
+  .act.keep:hover { filter: brightness(1.08); border-color: var(--accent); }
+  .act.keep svg { width: 24px; height: 24px; }
+  .act .cap {
+    position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+    white-space: nowrap; text-align: center; pointer-events: none;
+  }
+  .act .cap b { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+  .act .cap i { display: block; font-family: var(--mono); font-style: normal; font-size: 9.5px;
+                color: var(--muted); margin-top: 1px; }
+  .act:hover .cap b { color: var(--accent-ink); }
+
+  /* the signature: an aimed destination that Space keeps firing into */
+  .aim {
+    display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 0;
+    border: 1.5px solid var(--line); border-radius: 13px; background: var(--ground);
+    padding: 10px 10px 10px 14px; text-align: left; transition: border-color .15s, background .15s;
+  }
+  .aim:hover { border-color: var(--accent); }
+  .aim.armed { border-color: rgba(74,134,219,.32); background: var(--card); }
+  .aim .keycap {
+    font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--muted);
+    border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 4px 9px; flex: none;
+  }
+  .aim.armed .keycap { color: var(--muted); }
+  .aim .aim-txt { flex: 1; min-width: 0; }
+  .aim .aim-txt b { display: block; font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
+  .aim.armed .aim-txt b { color: var(--accent-ink); }
+  .aim .aim-txt small { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .aim .swap { font-size: 11.5px; font-weight: 500; color: var(--muted); flex: none; padding-right: 4px; }
+  .aim:hover .swap { color: var(--accent-ink); }
+  @keyframes rearm { 0%,100% { transform: scale(1); } 40% { transform: scale(1.02); } }
+  .aim.pulse { animation: rearm .34s ease; }
+
+  .tally {
+    display: flex; align-items: center; gap: 8px; margin-top: 11px;
+    font-size: 12px; color: var(--muted); font-family: var(--mono);
+  }
+  .tally .n { flex: 1; }
+  .tally .n b { color: var(--ink); font-weight: 500; }
+  .mini {
+    border: 1px solid var(--line); background: var(--card); border-radius: 100px;
+    padding: 6px 13px; font-size: 11.5px; font-weight: 500; font-family: var(--ui);
+  }
+  .mini:hover:not(:disabled) { border-color: var(--ink); }
+  .mini:disabled { opacity: .38; cursor: default; }
+
+  /* ============ setup ============ */
+  .card-p {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px; margin-bottom: 14px;
+  }
+  .card-p h2 { font-size: 16px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.015em; }
+  .card-p .sub { font-size: 12.5px; color: var(--muted); margin: 0 0 15px; line-height: 1.55; }
+  input[type=text] {
+    width: 100%; background: var(--ground); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--ink); padding: 10px 12px; font-family: var(--mono); font-size: 12px;
+  }
+  input[type=text]:focus { outline: none; border-color: var(--accent); background: var(--card); }
+  .ghost {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 9px 13px; font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  }
+  .ghost:hover { border-color: var(--ink); }
+  .go {
+    width: 100%; padding: 15px; border-radius: 100px; border: none; background: var(--accent);
+    color: #fff; font-weight: 600; font-size: 14.5px; transition: filter .15s, transform .12s;
+  }
+  .go:hover { filter: brightness(1.08); } .go:active { transform: scale(.988); }
+  .go:disabled { background: #D9D5E4; cursor: default; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 13px; }
+  .chip { border: 1px dashed var(--line); background: var(--ground); border-radius: 100px;
+          padding: 7px 13px; font-size: 12.5px; font-weight: 500; }
+  .chip:hover { border-style: solid; border-color: var(--accent); color: var(--accent-ink); }
+  .row { display: flex; gap: 8px; align-items: center; background: var(--ground);
+         border: 1px solid var(--line); border-radius: 11px; padding: 8px 8px 8px 12px; margin-bottom: 7px; }
+  .row .p { flex: 1; font-family: var(--mono); font-size: 11.5px; word-break: break-all; line-height: 1.45; }
+  .row .tag { font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--accent-ink);
+              background: var(--accent-soft); padding: 3px 8px; border-radius: 100px; }
+  .row label { font-size: 11.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; white-space: nowrap; }
+  .row .x { background: none; border: none; color: var(--muted); font-size: 15px; padding: 2px 5px; line-height: 1; }
+  .row .x:hover { color: var(--accent-ink); }
+  .none { font-size: 12.5px; color: var(--muted); padding: 3px 0 11px; }
+  .addrow { display: flex; gap: 7px; margin-top: 9px; }
+  .types { display: flex; gap: 18px; margin: 16px 0 0; font-size: 13.5px; }
+  .types label { display: flex; gap: 7px; align-items: center; }
+  .browse { margin-top: 9px; background: var(--ground); border: 1px solid var(--line); border-radius: 11px;
+            padding: 11px; max-height: 240px; overflow-y: auto; font-size: 12.5px; display: none; }
+  .browse.open { display: block; }
+  .browse .at { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 9px; word-break: break-all; }
+  .browse .d { padding: 7px 9px; border-radius: 7px; cursor: pointer; }
+  .browse .d:hover { background: var(--card); }
+  .browse .acts2 { display: flex; gap: 7px; margin-top: 10px; }
+  .warn { color: var(--accent-ink); font-size: 12px; padding: 8px 10px; line-height: 1.55;
+          background: var(--accent-soft); border-radius: 9px; }
+
+  /* ============ empty ============ */
+  .done { text-align: center; padding: 60px 24px; }
+  .done h2 { font-size: 22px; font-weight: 600; margin: 0 0 8px; letter-spacing: -.02em; }
+  .done p { color: var(--muted); font-size: 13.5px; margin: 0 0 20px; line-height: 1.6; }
+
+  /* ============ grid ============ */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; }
+  .tile { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; cursor: pointer;
+          border: 2px solid transparent; background: var(--stage); }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile.on { border-color: var(--accent); }
+  .tile.on::after { content: ""; position: absolute; inset: 0; background: var(--accent); opacity: .16; }
+  .tile .nm { position: absolute; left: 0; right: 0; bottom: 0; padding: 15px 6px 5px; z-index: 2;
+    background: linear-gradient(transparent, rgba(20,19,26,.82)); color: #fff;
+    font-family: var(--mono); font-size: 8.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bulk { position: sticky; bottom: 0; margin-top: 14px; background: var(--ink); color: #fff;
+    border-radius: 100px; padding: 9px 9px 9px 18px; display: flex; align-items: center; gap: 7px;
+    box-shadow: 0 10px 30px -8px rgba(20,19,26,.5); font-size: 12.5px; font-weight: 500; font-family: var(--mono); }
+  .bulk .sp { flex: 1; }
+  .bulk button { background: rgba(255,255,255,.14); border: none; color: #fff; border-radius: 100px;
+                 padding: 8px 14px; font-size: 12px; font-weight: 500; font-family: var(--ui); }
+  .bulk button:hover { background: rgba(255,255,255,.26); }
+  .bulk button.pri { background: var(--accent); }
+
+  /* ============ picker sheet ============ */
+  .scrim { position: fixed; inset: 0; background: rgba(20,19,26,.4); backdrop-filter: blur(4px);
+           display: none; align-items: flex-end; justify-content: center; z-index: 50; padding: 16px; }
+  .scrim.open { display: flex; }
+  .sheet { background: var(--card); border-radius: 22px; width: 100%; max-width: 560px; padding: 22px;
+           max-height: 84vh; overflow-y: auto; animation: rise .22s cubic-bezier(.2,.8,.3,1);
+           box-shadow: 0 -10px 44px rgba(20,19,26,.26); }
+  @keyframes rise { from { transform: translateY(30px); opacity: 0; } }
+  .sheet h2 { font-size: 18px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.015em; }
+  .sheet .sub { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; line-height: 1.55; }
+  .dest {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    background: var(--ground); border: 1.5px solid var(--line); border-radius: 13px;
+    padding: 12px 14px; margin-bottom: 8px; transition: border-color .15s, background .15s;
+  }
+  .dest:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .dest.on { border-color: var(--accent); background: var(--accent-soft); }
+  .dest .n { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--accent-ink);
+    background: var(--accent-soft); border-radius: 7px; width: 25px; height: 25px;
+    display: grid; place-items: center; flex: none; }
+  .dest .t { flex: 1; min-width: 0; }
+  .dest .t b { display: block; font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
+  .dest .t small { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted);
+                   word-break: break-all; margin-top: 1px; }
+  .dest .now { font-family: var(--mono); font-size: 9.5px; color: var(--accent-ink); flex: none; }
+
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(72px);
+    background: var(--ink); color: #fff; padding: 11px 20px; border-radius: 100px; font-size: 13px;
+    font-weight: 500; opacity: 0; transition: transform .26s cubic-bezier(.2,.8,.3,1), opacity .26s;
+    z-index: 70; pointer-events: none; max-width: 90vw; }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .hidden { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+  @media (max-width: 520px) {
+    .stage { padding: 14px 14px 10px; }
+    .dock { padding: 12px 16px 14px; }
+    .acts { gap: 10px; } .act { width: 48px; height: 48px; } .act.keep { width: 54px; height: 54px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1 class="wordmark">screenshot <b>triage</b></h1>
+  <div class="topright">
+    <button class="mini" id="to-setup">Folders and setup</button>
+    <div class="vault">nothing is deleted<br><b id="vault">quarantine empty</b></div>
+  </div>
+</div>
+
+<main id="main" class="scrolls">
+
+  <!-- ================= SETUP ================= -->
+  <section id="setup" class="wrap">
+    <div class="card-p">
+      <h2>Where should I look</h2>
+      <p class="sub">Pick the folders that collect clutter. Nothing is read until you start.</p>
+      <div class="chips" id="chips"></div>
+      <div id="srcs"></div>
+      <div class="addrow">
+        <input type="text" id="new-src" placeholder="or paste a folder path">
+        <button class="ghost" id="b-src">Browse</button>
+        <button class="ghost" id="a-src">Add</button>
+      </div>
+      <label class="sub" style="display:flex;gap:6px;align-items:center;margin:10px 0 0;">
+        <input type="checkbox" id="recursive"> include subfolders
+      </label>
+      <div class="browse" id="browse">
+        <div class="at" id="browse-at"></div>
+        <div id="browse-list"></div>
+        <div class="acts2">
+          <button class="ghost" id="b-pick">Use this folder</button>
+          <button class="ghost" id="b-close">Close</button>
+        </div>
+      </div>
+      <div class="types">
+        <label><input type="checkbox" id="t-img" checked> Images</label>
+        <label><input type="checkbox" id="t-csv"> CSVs</label>
+      </div>
+    </div>
+
+    <div class="card-p">
+      <h2>Where things can go</h2>
+      <p class="sub">Folders you can file into. Space fires into whichever one is aimed, and you can add more mid review.</p>
+      <div id="dests"></div>
+      <div class="addrow">
+        <input type="text" id="new-dest" placeholder="folder path, created if missing">
+        <button class="ghost" id="b-dest">Browse</button>
+        <button class="ghost" id="a-dest">Add</button>
+      </div>
+    </div>
+
+    <button class="go" id="start">Start reviewing</button>
+  </section>
+
+  <!-- ================= REVIEW STAGE ================= -->
+  <section id="stage" class="stage hidden"></section>
+
+  <!-- ================= GRID ================= -->
+  <section id="gridview" class="wrap hidden">
+    <div class="card-p" style="padding:16px 18px;">
+      <h2 style="margin-bottom:2px;">Select many</h2>
+      <p class="sub" id="grid-sub" style="margin:0;">Click to select. One decision covers all of them.</p>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="bulk hidden" id="bulk">
+      <span id="bulk-n">0 selected</span><div class="sp"></div>
+      <button id="bulk-keep">Keep</button>
+      <button id="bulk-out">Throw out</button>
+      <button class="pri" id="bulk-file">File</button>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <button class="mini" id="grid-back">Back to cards</button>
+    </div>
+  </section>
+</main>
+
+<!-- ================= DOCK ================= -->
+<div class="dock hidden" id="dock">
+  <div class="dock-in">
+    <div class="name" id="name"></div>
+    <div class="facts" id="facts"></div>
+
+    <div class="acts">
+      <button class="act out" data-act="remove" title="Throw out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <span class="cap"><b>Throw out</b><i>A or ←</i></span>
+      </button>
+      <button class="act" data-act="rename" title="Rename">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        <span class="cap"><b>Rename</b><i>↓</i></span>
+      </button>
+      <button class="act" data-act="star" title="Star">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.9 5.9 6.1.9-4.5 4.3 1.1 6.4L12 17.5 6.4 20.5l1.1-6.4L3 9.8l6.1-.9Z"/></svg>
+        <span class="cap"><b>Star</b><i>↑</i></span>
+      </button>
+      <button class="act keep" data-act="keep" title="Keep">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z"/></svg>
+        <span class="cap"><b>Keep</b><i>D or →</i></span>
+      </button>
+    </div>
+
+    <button class="aim" id="aim">
+      <span class="keycap">space</span>
+      <span class="aim-txt"><b id="aim-name">Aim at a folder</b><small id="aim-path">Space files the card into it, every time, until you change it</small></span>
+      <span class="swap" id="aim-swap">choose</span>
+    </button>
+
+    <div class="tally">
+      <div class="n" id="tally"></div>
+      <button class="mini" id="to-grid">Select many</button>
+      <button class="mini" id="undo" disabled>Undo</button>
+      <button class="mini" id="export">Export kept list</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PICKER ================= -->
+<div class="scrim" id="scrim">
+  <div class="sheet">
+    <h2 id="sheet-h">Aim Space at a folder</h2>
+    <p class="sub" id="sheet-s">Press a number or click. Space keeps filing into it until you pick another.</p>
+    <div id="sheet-list"></div>
+    <div class="addrow" style="margin-top:14px;">
+      <input type="text" id="sheet-new" placeholder="new folder path, created if missing">
+      <button class="ghost" id="sheet-add">Add</button>
+    </div>
+    <button class="ghost" id="sheet-x" style="width:100%;margin-top:9px;padding:11px;">Cancel, Esc</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+let folders = [], destinations = [], armed = null;
+let queue = [], counts = {}, problems = [], queueTotal = 0, historyDepth = 0;
+let current = null, renaming = false, browseAt = null, browseFor = 'src';
+let mode = 'setup', selected = new Set(), pickerFor = 'aim';
+
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const base = (p) => p.replace(/\/+$/,'').split('/').pop() || p;
+const tilde = (p) => p.replace(/^\/Users\/[^/]+/, '~');
+function size(n){ const u=['B','KB','MB','GB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++;} return (i?n.toFixed(1):n.toFixed(0))+' '+u[i]; }
+function age(m){ const d=Math.floor((Date.now()/1000-m)/86400);
+  const s=new Date(m*1000).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  return d<=0?`today, ${s}`:d===1?`yesterday, ${s}`:d<365?`${d} days ago, ${s}`:s; }
+let tt; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show');
+  clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),2300); }
+
+function show(m) {
+  mode = m;
+  $('setup').classList.toggle('hidden', m !== 'setup');
+  $('stage').classList.toggle('hidden', m !== 'review');
+  $('gridview').classList.toggle('hidden', m !== 'grid');
+  $('dock').classList.toggle('hidden', m !== 'review');
+  $('main').classList.toggle('scrolls', m !== 'review');
+}
+
+/* ---------------- setup ---------------- */
+async function loadChips() {
+  const d = await (await fetch('/api/suggestions')).json();
+  const box = $('chips'); box.innerHTML = '';
+  d.suggestions.forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = '+ ' + s.label; b.title = s.path;
+    b.onclick = () => {
+      if (folders.some(f => f.path === s.path)) return toast('Already on the list');
+      folders.push({ path: s.path, recursive: false }); drawSrcs();
+    };
+    box.appendChild(b);
+  });
+}
+function drawSrcs() {
+  const l = $('srcs'); l.innerHTML = folders.length ? '' :
+    '<div class="none">No folders yet. Pick a suggestion above or paste a path.</div>';
+  folders.forEach((f, i) => {
+    const r = document.createElement('div'); r.className = 'row';
+    r.innerHTML = `<div class="p">${esc(f.path)}</div>
+      <label><input type="checkbox" ${f.recursive?'checked':''}> subfolders</label><button class="x">✕</button>`;
+    r.querySelector('input').onchange = e => folders[i].recursive = e.target.checked;
+    r.querySelector('.x').onclick = () => { folders.splice(i,1); drawSrcs(); };
+    l.appendChild(r);
+  });
+  $('start').disabled = !folders.length;
+}
+function drawDests() {
+  const l = $('dests'); l.innerHTML = destinations.length ? '' :
+    '<div class="none">No destinations yet. You can also add one mid review.</div>';
+  destinations.forEach((d, i) => {
+    const r = document.createElement('div'); r.className = 'row';
+    r.innerHTML = `<span class="tag">${esc(d.label)}</span><div class="p">${esc(d.path)}</div><button class="x">✕</button>`;
+    r.querySelector('.x').onclick = () => {
+      if (armed === d.path) armed = null;
+      destinations.splice(i,1); drawDests(); drawAim(); saveDests();
+    };
+    l.appendChild(r);
+  });
+}
+function addDest(p) {
+  p = (p||'').trim(); if (!p) return false;
+  if (destinations.some(d => d.path === p)) { toast('Already a destination'); return false; }
+  destinations.push({ path: p, label: base(p) }); drawDests(); saveDests(); return true;
+}
+const saveDests = () => fetch('/api/destinations', { method:'POST',
+  headers:{'Content-Type':'application/json'}, body: JSON.stringify({ destinations, armed }) });
+
+$('a-src').onclick = () => { const p=$('new-src').value.trim(); if(!p) return;
+  folders.push({path:p, recursive:$('recursive').checked}); $('new-src').value=''; $('recursive').checked=false; drawSrcs(); };
+$('a-dest').onclick = () => { if (addDest($('new-dest').value)) $('new-dest').value=''; };
+
+/* ---------------- browse ---------------- */
+async function browse(p) {
+  const d = await (await fetch('/api/browse?path='+encodeURIComponent(p||'~'))).json();
+  browseAt = d.path; $('browse-at').textContent = d.path;
+  const box = $('browse-list'); box.innerHTML = '';
+  if (d.problem) box.innerHTML = `<div class="warn">This folder could not be read: ${esc(d.problem)}. That is a permission problem, not an empty folder.</div>`;
+  if (d.parent) { const u=document.createElement('div'); u.className='d'; u.textContent='↑ ..';
+    u.onclick=()=>browse(d.parent); box.appendChild(u); }
+  d.dirs.forEach(x => { const e=document.createElement('div'); e.className='d'; e.textContent=x.name;
+    e.onclick=()=>browse(x.path); box.appendChild(e); });
+  $('browse').classList.add('open');
+}
+$('b-src').onclick = () => { browseFor='src'; browse($('new-src').value||'~'); };
+$('b-dest').onclick = () => { browseFor='dest'; browse($('new-dest').value||'~'); };
+$('b-close').onclick = () => $('browse').classList.remove('open');
+$('b-pick').onclick = () => { $(browseFor==='src'?'new-src':'new-dest').value = browseAt; $('browse').classList.remove('open'); };
+
+/* ---------------- scan ---------------- */
+$('start').onclick = async () => {
+  const types = []; if ($('t-img').checked) types.push('images'); if ($('t-csv').checked) types.push('csvs');
+  if (!types.length) return toast('Pick at least one file type');
+  $('start').textContent = 'Looking...';
+  const d = await (await fetch('/api/scan', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ folders, types, destinations, armed }) })).json();
+  $('start').textContent = 'Start reviewing';
+  apply(d);
+  if (problems.length) toast(`${problems.length} folder(s) could not be read: ${problems[0].problem}`);
+  else if (!queueTotal) toast('Those folders are readable and hold nothing to review');
+  show('review');
+};
+
+function apply(d) {
+  folders = d.config.folders || []; destinations = d.config.destinations || [];
+  armed = d.config.armed || null;
+  queue = d.queue; queueTotal = d.queue_total; counts = d.counts;
+  historyDepth = d.history_depth; problems = d.problems || [];
+  $('t-img').checked = d.config.types.includes('images');
+  $('t-csv').checked = d.config.types.includes('csvs');
+  current = queue[0] || null;
+  drawSrcs(); drawDests(); drawStage(); drawDock();
+  if (mode === 'grid') drawGrid();
+}
+const refresh = async () => apply(await (await fetch('/api/state')).json());
+
+/* ---------------- stage ---------------- */
+function drawStage(fly) {
+  const s = $('stage'); renaming = false;
+  if (!current) {
+    s.innerHTML = `<div class="done">
+      <h2>That is the whole pile</h2>
+      <p>Nothing left to review. Everything you threw out is still sitting in quarantine<br>until you empty it yourself.</p>
+      <button class="ghost" onclick="document.getElementById('to-setup').click()">Choose more folders</button>
+    </div>`;
+    return;
+  }
+  const it = current;
+  s.innerHTML = `<div class="flyer ${fly||''}" id="flyer">` + (it.category === 'image'
+    ? `<img class="shot" id="shotimg" src="/api/image?id=${it.id}" alt="">`
+    : `<div class="noshot"><span class="ext">${esc(it.ext.replace('.','').toUpperCase())}</span>no preview for this format<br>the name and size still apply</div>`)
+    + `</div>`;
+  const img = $('shotimg');
+  if (img) img.onerror = () => { $('flyer').innerHTML =
+    `<div class="noshot"><span class="ext">${esc(it.ext.replace('.','').toUpperCase())}</span>this browser cannot decode it<br>the name and size still apply</div>`; };
+}
+
+function drawDock() {
+  if (!current) { $('name').textContent = ''; $('facts').textContent = ''; }
+  else {
+    $('name').innerHTML = esc(current.name) + (current.starred ? '<span class="star-on">★</span>' : '');
+    $('facts').textContent = `${size(current.size)} · ${age(current.mtime)} · ${tilde(current.path.replace(/\/[^/]*$/,''))}`;
+  }
+  document.querySelectorAll('.act').forEach(b => b.disabled = !current);
+  $('tally').innerHTML = `<b>${queueTotal}</b> to go · <b>${counts.kept||0}</b> kept · <b>${counts.filed||0}</b> filed · <b>${counts.removed||0}</b> out`;
+  $('undo').disabled = historyDepth === 0;
+  $('vault').textContent = counts.removed ? `${counts.removed} in quarantine` : 'quarantine empty';
+  drawAim();
+}
+
+function drawAim(pulse) {
+  const a = $('aim');
+  if (armed) {
+    a.classList.add('armed');
+    $('aim-name').textContent = base(armed);
+    $('aim-path').textContent = tilde(armed);
+    $('aim-swap').textContent = 'change';
+  } else {
+    a.classList.remove('armed');
+    $('aim-name').textContent = 'Aim at a folder';
+    $('aim-path').textContent = 'Space files the card into it, every time, until you change it';
+    $('aim-swap').textContent = 'choose';
+  }
+  if (pulse) { a.classList.remove('pulse'); void a.offsetWidth; a.classList.add('pulse'); }
+}
+
+/* ---------------- rename ---------------- */
+function startRename() {
+  if (!current || renaming) return;
+  renaming = true;
+  const stem = current.ext ? current.name.slice(0, -current.ext.length) : current.name;
+  $('name').innerHTML = `<input type="text" id="ren" value="${esc(current.name)}">`;
+  const i = $('ren'); i.focus(); i.setSelectionRange(0, stem.length);
+}
+async function endRename() {
+  const i = $('ren'); if (!i) return;
+  const v = i.value.trim();
+  if (!v || v === current.name) { renaming = false; drawDock(); return; }
+  await act('rename', { new_name: v });
+}
+
+/* ---------------- actions ---------------- */
+// Swiping fast is the point, so a decision must not wait for the round trip.
+// We advance to the next card the moment a key is pressed and reconcile with
+// the server once the burst settles. Without this, two quick presses both land
+// on the same file: the second one re-files what the first already moved.
+let inflight = 0;
+
+async function act(action, extra) {
+  if (!current) return;
+  if (action === 'rename') return renameNow(extra);
+
+  const target = current;
+  const fly = { remove:'go-remove', keep:'go-keep', star:'go-star', move:'go-move' }[action];
+  const f = $('flyer'); if (f && fly) f.classList.add(fly);
+
+  // Optimistic advance. The card leaving and the next one arriving are local.
+  queue.shift();
+  current = queue[0] || null;
+  queueTotal = Math.max(0, queueTotal - 1);
+  counts[action === 'remove' ? 'removed' : action === 'move' ? 'filed' : 'kept'] =
+    (counts[action === 'remove' ? 'removed' : action === 'move' ? 'filed' : 'kept'] || 0) + 1;
+  historyDepth++;
+  setTimeout(() => { drawStage(); drawDock(); }, fly ? 230 : 0);
+
+  inflight++;
+  const r = await fetch('/api/action', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id: target.id, action, ...(extra||{}) }) });
+  inflight--;
+  if (!r.ok) {
+    const d = await r.json();
+    toast(`${target.name}: ${d.error || 'that did not work'}`);
+    return refresh();
+  }
+  // Only the last request in a burst re-reads the truth, and tops the queue up.
+  if (inflight === 0) setTimeout(() => { if (inflight === 0) refresh(); }, 260);
+}
+
+// Rename is deliberate, not a swipe, so it stays synchronous.
+async function renameNow(extra) {
+  const target = current;
+  const r = await fetch('/api/action', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id: target.id, action: 'rename', ...(extra||{}) }) });
+  const d = await r.json();
+  renaming = false;
+  if (!r.ok) { toast(d.error || 'That did not work'); drawDock(); return; }
+  await refresh();
+}
+
+function fileIt() {
+  if (!current) return;
+  if (!armed) { openPicker('aim'); return; }
+  act('move', { dest: armed });
+}
+
+$('undo').onclick = async () => {
+  const r = await fetch('/api/undo', { method:'POST' }); const d = await r.json();
+  if (!r.ok) return toast(d.error || 'Nothing to undo');
+  toast(d.undone === 1 ? 'Put back' : `Put ${d.undone} back`);
+  await refresh();
+};
+document.querySelectorAll('.act').forEach(b =>
+  b.onclick = () => b.dataset.act === 'rename' ? startRename() : act(b.dataset.act));
+$('aim').onclick = () => openPicker('aim');
+$('to-setup').onclick = () => { show('setup'); $('browse').classList.remove('open'); };
+$('to-grid').onclick = () => { selected.clear(); show('grid'); drawGrid(); };
+$('grid-back').onclick = () => { selected.clear(); show('review'); };
+$('export').onclick = () => (counts.kept||counts.filed) ? window.location='/api/export' : toast('Nothing kept yet');
+
+/* ---------------- picker ---------------- */
+function openPicker(what) {
+  pickerFor = what;
+  const many = what === 'bulk';
+  $('sheet-h').textContent = many ? `File ${selected.size} files where` : 'Aim Space at a folder';
+  $('sheet-s').textContent = destinations.length
+    ? (many ? 'Press a number or click.' : 'Press a number or click. Space keeps filing into it until you pick another.')
+    : 'No destinations yet. Add one below and it stays for the rest of the session.';
+  const l = $('sheet-list'); l.innerHTML = '';
+  destinations.forEach((d, i) => {
+    const b = document.createElement('button');
+    b.className = 'dest' + (!many && armed === d.path ? ' on' : '');
+    b.innerHTML = `<span class="n">${i<9?i+1:'·'}</span>
+      <span class="t"><b>${esc(d.label)}</b><small>${esc(tilde(d.path))}</small></span>
+      ${!many && armed === d.path ? '<span class="now">aimed</span>' : ''}`;
+    b.onclick = () => pick(d.path);
+    l.appendChild(b);
+  });
+  $('scrim').classList.add('open');
+  if (!destinations.length) setTimeout(() => $('sheet-new').focus(), 60);
+}
+const closePicker = () => $('scrim').classList.remove('open');
+
+async function pick(path) {
+  closePicker();
+  if (pickerFor === 'bulk') { await bulk('move', path); return; }
+  armed = path; saveDests(); drawAim(true);
+  // Aiming mid card means you meant this one too.
+  if (current) { act('move', { dest: path }); toast('Space now files into ' + base(path)); }
+  else toast('Space now files into ' + base(path));
+}
+$('sheet-x').onclick = closePicker;
+$('scrim').onclick = e => { if (e.target === $('scrim')) closePicker(); };
+$('sheet-add').onclick = () => { const p = $('sheet-new').value.trim();
+  if (!addDest(p)) return; $('sheet-new').value=''; pick(p); };
+$('sheet-new').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('sheet-add').click(); } };
+
+/* ---------------- grid ---------------- */
+function drawGrid() {
+  const g = $('grid'); g.innerHTML = '';
+  $('grid-sub').textContent = queueTotal > queue.length
+    ? `Showing the oldest ${queue.length} of ${queueTotal}. Click to select.`
+    : 'Click to select. One decision covers all of them.';
+  queue.forEach(it => {
+    const t = document.createElement('div');
+    t.className = 'tile' + (selected.has(it.id) ? ' on' : '');
+    t.innerHTML = (it.category === 'image' ? `<img loading="lazy" src="/api/image?id=${it.id}" alt="">` : '')
+      + `<div class="nm">${esc(it.name)}</div>`;
+    t.onclick = () => { selected.has(it.id) ? selected.delete(it.id) : selected.add(it.id);
+      t.classList.toggle('on'); drawBulk(); };
+    g.appendChild(t);
+  });
+  drawBulk();
+}
+function drawBulk() {
+  $('bulk').classList.toggle('hidden', !selected.size);
+  $('bulk-n').textContent = `${selected.size} selected`;
+}
+async function bulk(action, dest) {
+  if (!selected.size) return;
+  const d = await (await fetch('/api/bulk', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ ids:[...selected], action, dest }) })).json();
+  selected.clear();
+  toast(d.failures && d.failures.length ? `${d.applied} done, ${d.failures.length} failed`
+    : `${d.applied} files, one undo away`);
+  await refresh();
+}
+$('bulk-keep').onclick = () => bulk('keep');
+$('bulk-out').onclick  = () => bulk('remove');
+$('bulk-file').onclick = () => armed ? bulk('move', armed) : openPicker('bulk');
+
+/* ---------------- keyboard ---------------- */
+window.addEventListener('keydown', e => {
+  const a = document.activeElement;
+  if (a && a.id === 'ren') {
+    if (e.key === 'Enter') { e.preventDefault(); endRename(); }
+    else if (e.key === 'Escape') { e.preventDefault(); renaming = false; drawDock(); }
+    return;
+  }
+  if ($('scrim').classList.contains('open')) {
+    if (e.key === 'Escape') { e.preventDefault(); closePicker(); return; }
+    if (a && a.tagName === 'INPUT') return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 9 && destinations[n-1]) { e.preventDefault(); pick(destinations[n-1].path); }
+    return;
+  }
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+
+  if (mode === 'grid') {
+    if (e.key === 'Escape') { e.preventDefault(); $('grid-back').click(); }
+    else if (e.key === ' ' && selected.size) { e.preventDefault(); $('bulk-file').click(); }
+    else if (e.key.toLowerCase() === 'z') { e.preventDefault(); $('undo').click(); }
+    return;
+  }
+  if (mode !== 'review') return;
+
+  const k = e.key.toLowerCase();
+  if (k === 'z') { e.preventDefault(); return $('undo').click(); }
+  if (k === 'g') { e.preventDefault(); return $('to-grid').click(); }
+  if (k === 'c') { e.preventDefault(); return openPicker('aim'); }
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= 9 && destinations[n-1]) { e.preventDefault(); return pick(destinations[n-1].path); }
+  if (!current) return;
+  if (e.key === 'ArrowLeft'  || k === 'a') { e.preventDefault(); act('remove'); }
+  else if (e.key === 'ArrowRight' || k === 'd') { e.preventDefault(); act('keep'); }
+  else if (e.key === 'ArrowUp')   { e.preventDefault(); act('star'); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); startRename(); }
+  else if (e.key === ' ')         { e.preventDefault(); fileIt(); }
+});
+
+/* ---------------- boot ---------------- */
+(async () => {
+  await loadChips();
+  apply(await (await fetch('/api/state')).json());
+  show(queueTotal > 0 && folders.length ? 'review' : 'setup');
+})();
+</script>
+</body>
+</html>
