@@ -36,7 +36,8 @@ def call(base, path, payload=None):
 
 def main():
     tmp = tempfile.mkdtemp(prefix="triage-test-")
-    app, src, dest, locked = (os.path.join(tmp, n) for n in ("app", "src", "dest", "locked"))
+    app, src, dest, locked, trash_stub = (
+        os.path.join(tmp, n) for n in ("app", "src", "dest", "locked", "trash-stub"))
     os.makedirs(os.path.join(app, "static"), exist_ok=True)
     os.makedirs(src); os.makedirs(dest); os.makedirs(locked)
     shutil.copy(os.path.join(HERE, "server.py"), app)
@@ -49,8 +50,9 @@ def main():
 
     port = free_port()
     base = f"http://127.0.0.1:{port}"
+    env = {**os.environ, "TRIAGE_TRASH_DIR": trash_stub}
     proc = subprocess.Popen([sys.executable, "server.py", "--port", str(port), "--no-browser"],
-                            cwd=app, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            cwd=app, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         for _ in range(50):
             try:
@@ -117,6 +119,26 @@ def main():
         # Every file that went in came back out. Nothing was destroyed.
         assert sorted(os.listdir(src)) == sorted(names), sorted(os.listdir(src))
         ok("after undoing everything, not one file was lost")
+
+        # --- quarantine -> Trash (osascript stubbed via TRIAGE_TRASH_DIR) ---
+        r = call(base, "/api/action", {"id": ids[1], "action": "remove"})
+        qpath = r["item"]["path"]
+        assert os.path.isfile(qpath), r
+        depth = call(base, "/api/state")["history_depth"]
+
+        r = call(base, "/api/quarantine/clear", {})
+        assert r["moved"] == 1 and r["failed"] == 0, r
+        assert r["counts"]["removed"] == 0, r
+        assert not os.path.exists(qpath), "the quarantined file should have left the app's folder"
+        stubbed = os.listdir(trash_stub)
+        assert len(stubbed) == 1 and stubbed[0].endswith("b.png"), stubbed
+        ok("clearing quarantine moves the file to the stub trash dir and zeroes the count")
+
+        assert call(base, "/api/state")["history_depth"] == depth, "clearing quarantine must not touch the undo stack"
+        r = call(base, "/api/undo", {})
+        assert not r.get("undone") and "Trash" in r.get("error", ""), r
+        assert call(base, "/api/state")["history_depth"] == depth, "a refused undo must not pop the stack"
+        ok("undoing a trashed remove refuses with a clear message instead of silently doing nothing")
 
         call(base, "/api/action", {"id": ids[0], "action": "keep"})
         with urllib.request.urlopen(base + "/api/export", timeout=10) as resp:

@@ -46,12 +46,15 @@ Destinations are created if they do not exist, and you can add one mid session.
 
 ## Nothing is deleted
 
-Throwing a file out moves it to `data/quarantine/` inside this folder. Nothing
-in this app calls `rm`, and nothing touches the system Trash. When you are ready,
-empty that folder yourself in Finder.
+Throwing a file out moves it to `data/quarantine/` inside this folder. Nothing in
+this app calls `rm`. When the pile is big enough, one button moves the whole
+quarantine to the macOS Trash, where it is still recoverable, and that is the only
+time anything leaves this folder.
 
 Every action is undoable, including a batch of them. `Z` walks back through the
-history and moves files physically back where they came from.
+history and moves files physically back where they came from. The one thing undo
+will not do is pull a file back out of the Trash. It says so instead of quietly
+doing nothing.
 
 ## Ten files
 

@@ -6,257 +6,459 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ground: #FAFBFC;
-    --card:   #FFFFFF;
-    --stage:  #DCE2EA;
-    --ink:    #14171C;
-    --muted:  #828893;
-    --line:   #E6EAEF;
-    --accent: #4A86DB;
-    --accent-ink: #2C5FA8;
-    --accent-soft: rgba(74,134,219,.10);
-    --ui:   "Outfit", "Avenir Next", sans-serif;
-    --mono: "DM Mono", ui-monospace, Menlo, monospace;
-    --dock-shadow: 0 -1px 0 var(--line), 0 -14px 34px -18px rgba(20,19,26,.28);
+    /* warm ivory, not sterile paper -- the light-table concept still needs a
+       ground with some body to it, not #F9FAFA */
+    --ground:  #F4EFE5;
+    --surface: #FCFAF5;
+    --surface-2: #EEE6D6;
+    --stage:   #CFDAE8;
+    --ink:     #202634;
+    --muted:   #5F6673;
+    --line:    #DED2BC;
+    --line-soft: #E9DFC9;
+    /* keep / love -- the hero blue */
+    --flare:   #2E5DAE;
+    --flare-ink: #3568C4;
+    --flare-soft: rgba(74,134,219,.16);
+    /* star */
+    --gold:    #8A5A0A;
+    --gold-soft: rgba(200,140,20,.18);
+    /* organize / functional -- one hero blue runs the whole room */
+    --spark:   #2E5DAE;
+    --spark-ink: #3568C4;
+    --spark-soft: rgba(74,134,219,.16);
+    --muted-soft: rgba(95,102,115,.14);
+    /* danger-ish, kept apart from the hero blue on purpose */
+    --warn: #B23B3B;
+    --warn-soft: rgba(178,59,59,.12);
+    --ui:      "Outfit", "Avenir Next", sans-serif;
+    --display: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --mono:    "DM Mono", ui-monospace, Menlo, monospace;
+    --dock-shadow: 0 -1px 0 var(--line), 0 -22px 40px -22px rgba(32,38,52,.16);
   }
   * { box-sizing: border-box; }
   html { height: 100%; }
   body {
     margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
-    background: var(--ground); color: var(--ink);
+    background:
+      radial-gradient(ellipse 900px 520px at 12% -8%, rgba(74,134,219,.07), transparent 60%),
+      radial-gradient(ellipse 720px 520px at 102% 108%, rgba(200,140,20,.05), transparent 55%),
+      var(--ground);
+    color: var(--ink);
     font-family: var(--ui); -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+  /* faint film grain so the warm chrome reads as material, not flat */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .035; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   }
   button { font-family: var(--ui); cursor: pointer; color: inherit; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  input[type=checkbox] { accent-color: var(--spark); }
+  :focus-visible { outline: 2px solid var(--spark); outline-offset: 2px; border-radius: 6px; }
 
   /* ============ masthead ============ */
   .top {
     flex: none; display: flex; align-items: center; justify-content: space-between;
-    padding: 13px 22px; border-bottom: 1px solid var(--line); background: var(--card);
+    padding: 14px 22px; border-bottom: 1px solid var(--line); background: var(--surface);
+    position: relative; z-index: 30;
   }
-  .wordmark { font-size: 15px; font-weight: 600; letter-spacing: -.02em; margin: 0; }
-  .wordmark b { font-weight: 700; color: var(--accent-ink); }
-  .topright { display: flex; align-items: center; gap: 14px; }
-  .vault { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: right; line-height: 1.5; }
-  .vault b { color: var(--ink); font-weight: 500; }
+  .wordmark { font-size: 16px; font-weight: 500; letter-spacing: .01em; margin: 0; color: var(--muted); }
+  .wordmark b {
+    font-family: var(--display); font-style: italic; font-weight: 600; font-size: 18px; letter-spacing: -.01em;
+    color: var(--flare-ink); display: inline-block; transform: rotate(0deg);
+    background: linear-gradient(100deg, var(--flare) 0%, #4E86D8 55%, var(--gold) 130%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    transition: transform .22s cubic-bezier(.34,1.6,.64,1);
+  }
+  .wordmark:hover b { transform: rotate(-2deg) scale(1.05); }
+  .topright { display: flex; align-items: center; gap: 16px; }
+  .vault-wrap { position: relative; }
+  .vault-btn {
+    background: none; border: none; padding: 0; text-align: right;
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted); line-height: 1.55;
+  }
+  .vault-btn b { color: var(--ink); font-weight: 500; }
+  .vault-btn:hover, .vault-btn:focus-visible { color: var(--spark-ink); }
+  .vault-hint {
+    position: absolute; top: calc(100% + 9px); right: -6px; z-index: 2; width: 240px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 13px; font-size: 11px; color: var(--muted); line-height: 1.55; text-align: left;
+    box-shadow: 0 8px 24px -10px rgba(32,38,52,.22);
+    opacity: 0; visibility: hidden; transform: translateY(-4px);
+    transition: opacity .15s, transform .15s, visibility 0s .15s;
+  }
+  .vault-hint::before { content: ""; position: absolute; bottom: 100%; right: 14px; border: 6px solid transparent; border-bottom-color: var(--line); }
+  .vault-hint::after { content: ""; position: absolute; bottom: 100%; right: 14px; margin-bottom: -1px; border: 5px solid transparent; border-bottom-color: var(--surface); }
+  .vault-hint code { display: block; margin-top: 7px; font-family: var(--mono); font-size: 10px; color: var(--spark-ink); word-break: break-all; }
+  .vault-wrap:hover .vault-hint, .vault-wrap:focus-within .vault-hint, .vault-hint.open {
+    opacity: 1; visibility: visible; transform: translateY(0); transition: opacity .15s, transform .15s;
+  }
+  /* the one weighty action in this app -- present but not alarming until you commit */
+  .vault-trash-btn {
+    display: block; width: 100%; margin-top: 10px; padding: 7px 0; text-align: center;
+    font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: .01em;
+    color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px;
+    transition: border-color .15s, color .15s;
+  }
+  .vault-trash-btn:hover:not(:disabled) { border-color: var(--warn); color: var(--warn); }
+  .vault-trash-btn:disabled { opacity: .4; cursor: default; }
+  .vault-confirm p { margin: 0 0 10px; }
+  .vault-confirm-row { display: flex; gap: 8px; }
+  .vault-confirm-row button {
+    flex: 1; padding: 7px 0; border-radius: 7px; font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .vault-confirm-cancel { background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); }
+  .vault-confirm-cancel:hover { border-color: var(--spark); color: var(--spark-ink); }
+  .vault-confirm-trash { background: var(--warn-soft); border: 1px solid var(--warn); color: var(--warn); }
+  .vault-confirm-trash:hover:not(:disabled) { background: var(--warn); color: #fff; }
+  .vault-confirm-trash:disabled { opacity: .6; cursor: default; }
+  .help-btn {
+    width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--muted); font-family: var(--mono); font-size: 13px; font-weight: 600;
+    display: grid; place-items: center; flex: none;
+    transition: border-color .15s, color .15s, background .15s, transform .14s cubic-bezier(.34,1.76,.64,1);
+  }
+  .help-btn:hover { border-color: var(--spark); color: var(--spark-ink); }
+  .help-btn:active { transform: scale(.88); }
+
+  /* ============ shortcuts overlay -- every key its own tactile keycap ============ */
+  .kbd-key {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px;
+    font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 7px; background: var(--surface);
+    box-shadow: 0 2px 0 var(--line); padding: 0 8px;
+  }
+  .kbd-group { margin-top: 18px; }
+  .kbd-group:first-of-type { margin-top: 2px; }
+  .kbd-group h3 {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--spark-ink); margin: 0 0 9px; font-weight: 500;
+  }
+  .kbd-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; }
+  .kbd-row .kbd-sep { color: var(--muted); font-size: 12px; }
+  .kbd-row .kbd-label { margin-left: 9px; font-size: 13px; color: var(--ink); }
+  .kbd-row .kbd-label small { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
 
   /* ============ the scrolling middle ============ */
-  main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  main { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; z-index: 1; }
   main.scrolls { overflow-y: auto; }
   .wrap { width: 100%; max-width: 620px; margin: 0 auto; padding: 22px; }
 
-  /* ============ image stage: the part that breathes ============ */
+  /* ============ image stage: a lit table the photo sits on ============ */
   .stage {
     flex: 1; min-height: 0; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
-    padding: 22px 24px 16px; background: var(--stage);
+    padding: 26px 26px 18px;
+    background: radial-gradient(ellipse 70% 60% at 50% 42%, #E7EDF6 0%, var(--stage) 70%);
   }
+  .stack { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  /* Each peek is the actual next card at its true aspect, just dimmed, rotated
+     and a step back -- so a swipe reveals the real thing, and the landing
+     animation can start from exactly this state with no shape or brightness jump. */
+  .peek {
+    position: absolute; inset: 0; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* Pushed back toward the stage's own pale tone -- a light UI recedes by
+     washing OUT (brighter, flatter), the opposite direction from dark, plus
+     desaturation and a couple px of blur. Stays fully opaque throughout (no
+     alpha) so it never ghosts through the front card -- only the filter
+     recedes, not the opacity. Tuned against a small card sitting over a huge,
+     high-contrast one, the worst case for "too clear". */
+  .peek img {
+    max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 14px;
+    box-shadow: 0 18px 40px -18px rgba(32,38,52,.35), 0 2px 8px rgba(32,38,52,.12);
+    filter: saturate(.55) brightness(1.35) contrast(.55) blur(2px);
+  }
+  .peek .ext {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 42px 56px; filter: brightness(.94);
+  }
+  .peek-1 { transform: rotate(-2.4deg) translateY(10px) scale(.91); z-index: 1; }
+
+  .flyer {
+    position: relative; z-index: 2; width: 100%; height: 100%; min-height: 0;
+    display: flex; align-items: center; justify-content: center; touch-action: none;
+    transition: transform .3s cubic-bezier(.35,.9,.4,1);
+    /* Promote to its own GPU layer: this is the element getting a fresh inline
+       transform on every pointermove, and without a standing layer the browser
+       re-rasterizes its rounded corners + shadow each frame, which reads as the
+       peek behind it wiggling at the reveal edge. */
+    will-change: transform;
+  }
+  /* Full opacity all the way out -- the stage's overflow:hidden clips it once it
+     clears the frame, so it never needs to go translucent and blend with the
+     peek cards sitting underneath. */
+  .flyer.go-remove { transform: translateX(-64vw) rotate(-13deg); }
+  .flyer.go-keep   { transform: translateX(64vw) rotate(13deg); }
+  .flyer.go-star   { transform: translateY(-38vh) scale(1.05); }
+  .flyer.go-move   { transform: translateY(42vh) scale(.86); }
+
   .shot {
-    max-width: 100%; max-height: 100%; display: block; border-radius: 10px;
-    background: var(--card); border: 1px solid rgba(20,19,26,.14);
-    box-shadow: 0 2px 4px rgba(20,19,26,.06), 0 22px 50px -22px rgba(20,19,26,.42);
-    object-fit: contain;
+    max-width: 100%; max-height: 100%; display: block; border-radius: 14px;
+    box-shadow: 0 2px 4px rgba(32,38,52,.12), 0 24px 50px -20px rgba(32,38,52,.28);
+    object-fit: contain; cursor: grab; user-select: none; -webkit-user-drag: none;
     animation: land .34s cubic-bezier(.2,.8,.3,1);
   }
-  @keyframes land { from { opacity: 0; transform: scale(.975) translateY(7px); } }
-  .flyer {
-    width: 100%; height: 100%; min-height: 0;
-    display: flex; align-items: center; justify-content: center;
-    transition: transform .3s cubic-bezier(.35,.9,.4,1), opacity .3s ease;
-  }
-  .flyer.go-remove { transform: translateX(-64vw) rotate(-13deg); opacity: 0; }
-  .flyer.go-keep   { transform: translateX(64vw) rotate(13deg);   opacity: 0; }
-  .flyer.go-star   { transform: translateY(-38vh) scale(1.05);    opacity: 0; }
-  .flyer.go-move   { transform: translateY(42vh) scale(.86);      opacity: 0; }
+  .shot:active { cursor: grabbing; }
+  /* No opacity ramp -- the incoming card is opaque and on top immediately, so it
+     never blends with the peek cards behind it. Just a small settle-in motion. */
+  @keyframes land { from { transform: rotate(-2.4deg) translateY(10px) scale(.91); filter: saturate(.55) brightness(1.35) contrast(.55) blur(2px); } }
   .noshot {
     font-family: var(--mono); font-size: 12.5px; color: var(--muted); text-align: center;
-    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 46px 34px; line-height: 1.7;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 46px 34px; line-height: 1.7;
+    cursor: grab; user-select: none;
   }
-  .noshot .ext { display: block; font-size: 26px; font-weight: 600; color: var(--ink); font-family: var(--ui); margin-bottom: 6px; }
+  .noshot .ext { display: block; font-size: 26px; font-weight: 600; color: var(--ink); font-family: var(--display); margin-bottom: 6px; }
+
+  /* .cardface fills the flyer at a definite size -- not shrink-to-fit -- so
+     .shot's percentage max-width/max-height resolve against a real number
+     instead of an indefinite auto height. An indefinite reference is what let
+     oversized images ignore max-height and get clipped by the stage's
+     overflow:hidden (the crop bug). The img is a direct child so it sizes
+     itself off that one definite ancestor -- no intermediate auto-sized
+     wrapper, which is what caused a second-order bug (flex stretch distorting
+     the aspect ratio) when tried. */
+  .cardface { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  /* .stampbox is a plain sibling of the img/noshot, JS-synced (syncStamp()) to
+     its exact rendered rect on load/resize, so the stamp anchors to the
+     visible photo's own corners instead of the full-bleed cardface box. */
+  .stampbox { position: absolute; pointer-events: none; }
+  .stampbox::after {
+    position: absolute; top: 18px; padding: 6px 16px; border: 3px solid; border-radius: 10px;
+    font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: .06em;
+    text-transform: uppercase; opacity: 0; transform: scale(.7); pointer-events: none;
+    box-shadow: 0 6px 16px -6px rgba(32,38,52,.25);
+    transition: opacity .12s ease, transform .18s cubic-bezier(.34,1.6,.64,1);
+  }
+  .flyer.drag-keep .stampbox::after { content: "keep"; right: 18px; color: var(--flare); border-color: var(--flare); background: var(--flare-soft); transform: rotate(9deg) scale(1); opacity: 1; }
+  .flyer.drag-out .stampbox::after  { content: "pass"; left: 18px;  color: var(--muted); border-color: var(--muted); background: var(--muted-soft); transform: rotate(-9deg) scale(1); opacity: 1; }
+  .flyer.drag-star .stampbox::after { content: "star"; left: 50%; color: var(--gold); border-color: var(--gold); background: var(--gold-soft); transform: translateX(-50%) rotate(-6deg) scale(1); opacity: 1; }
+  .flyer.drag-file .stampbox::after { content: "filed"; left: 50%; color: var(--spark); border-color: var(--spark); background: var(--spark-soft); transform: translateX(-50%) rotate(-6deg) scale(1); opacity: 1; }
 
   /* ============ the dock: everything you need, always in the same place ============ */
   .dock {
-    flex: none; background: var(--card); box-shadow: var(--dock-shadow);
-    padding: 13px 22px 14px;
+    flex: none; background: var(--surface); box-shadow: var(--dock-shadow);
+    padding: 14px 22px 15px; position: relative; z-index: 1;
   }
   .dock-in { max-width: 620px; margin: 0 auto; }
 
-  .name { font-size: 17px; font-weight: 600; letter-spacing: -.015em; line-height: 1.3; word-break: break-word; }
-  .name .star-on { color: var(--accent); margin-left: 5px; }
+  .name { font-family: var(--display); font-size: 18px; font-weight: 600; letter-spacing: -.01em; line-height: 1.3; word-break: break-word; }
+  .name .star-on { color: var(--gold); margin-left: 6px; }
   .name input {
-    width: 100%; font: inherit; background: var(--ground); color: var(--ink);
-    border: 1.5px solid var(--accent); border-radius: 9px; padding: 7px 10px;
+    width: 100%; font: inherit; background: var(--surface-2); color: var(--ink);
+    border: 1.5px solid var(--spark); border-radius: 9px; padding: 7px 10px;
   }
   .name input:focus { outline: none; }
   .facts {
-    font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 5px;
+    font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 7px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* circular actions, Hinge-style, sitting in their own row */
-  .acts { display: flex; align-items: center; justify-content: center; gap: 26px; margin: 12px 0 40px; }
+  /* circular actions, tactile, each a keycap of its own -- clustered as three
+     quieter choices plus one clear primary, not four equal floating dots */
+  .acts { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 18px 0 62px; }
   .act {
-    width: 54px; height: 54px; border-radius: 50%; border: 1.5px solid var(--line);
-    background: var(--card); display: grid; place-items: center; position: relative;
-    transition: transform .13s cubic-bezier(.3,1.4,.5,1), border-color .15s, background .15s;
+    width: 52px; height: 52px; border-radius: 50%; border: 1.5px solid var(--line);
+    background: var(--surface-2); display: grid; place-items: center; position: relative; color: var(--ink);
+    box-shadow: 0 2px 0 var(--line-soft), 0 1px 3px rgba(32,38,52,.15);
+    transition: transform .16s cubic-bezier(.34,1.76,.64,1), border-color .15s, background .15s, box-shadow .12s;
   }
-  .act:hover { border-color: var(--ink); }
-  .act:active { transform: scale(.9); }
-  .act svg { width: 21px; height: 21px; stroke-width: 1.9; }
-  .act.keep { border-color: var(--accent); background: var(--accent); color: #fff; width: 60px; height: 60px; }
-  .act.keep:hover { filter: brightness(1.08); border-color: var(--accent); }
-  .act.keep svg { width: 24px; height: 24px; }
+  .act svg { width: 20px; height: 20px; stroke-width: 1.9; }
+  .act:active { transform: translateY(1px) scale(.9); box-shadow: 0 0 0 var(--line-soft), 0 1px 2px rgba(32,38,52,.15); }
+  .act.out:hover { border-color: var(--muted); color: var(--ink); }
+  .act:not(.keep):not(.out):hover { border-color: var(--spark); box-shadow: 0 2px 0 var(--line-soft), 0 0 0 3px var(--spark-soft); }
+  .act[data-act="star"]:hover { border-color: var(--gold); box-shadow: 0 2px 0 var(--line-soft), 0 0 0 3px var(--gold-soft); color: var(--gold); }
+  .act.keep {
+    border-color: var(--flare); background: var(--flare); color: #F5F8FF; width: 58px; height: 58px;
+    margin-left: 11px;
+    box-shadow: 0 2px 0 rgba(20,30,50,.28), 0 6px 20px -6px var(--flare-soft);
+  }
+  .act.keep:hover { filter: brightness(1.08); box-shadow: 0 2px 0 rgba(20,30,50,.28), 0 8px 26px -6px rgba(74,134,219,.5); }
+  .act.keep:active { transform: translateY(1px) scale(.9); box-shadow: 0 0 0 rgba(20,30,50,.28), 0 4px 14px -6px var(--flare-soft); }
+  .act.keep svg { width: 23px; height: 23px; }
   .act .cap {
-    position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+    position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
     white-space: nowrap; text-align: center; pointer-events: none;
   }
   .act .cap b { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
-  .act .cap i { display: block; font-family: var(--mono); font-style: normal; font-size: 9.5px;
-                color: var(--muted); margin-top: 1px; }
-  .act:hover .cap b { color: var(--accent-ink); }
-
-  /* the signature: an aimed destination that Space keeps firing into */
-  .aim {
-    display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 0;
-    border: 1.5px solid var(--line); border-radius: 13px; background: var(--ground);
-    padding: 10px 10px 10px 14px; text-align: left; transition: border-color .15s, background .15s;
+  .act .cap i {
+    display: inline-block; font-family: var(--mono); font-style: normal; font-size: 9px; color: var(--muted);
+    margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px;
+    background: var(--surface); box-shadow: 0 1.5px 0 var(--line);
   }
-  .aim:hover { border-color: var(--accent); }
-  .aim.armed { border-color: rgba(74,134,219,.32); background: var(--card); }
+  .act:hover .cap b { color: var(--spark-ink); }
+  .act.keep:hover .cap b { color: var(--flare-ink); }
+  .act[data-act="star"]:hover .cap b { color: var(--gold); }
+
+  /* the signature: an aimed destination that Space keeps firing into. A tinted
+     wash and a crosshair mark instead of a flat bordered rect, so it reads as
+     a loaded control rather than a text field waiting for input. */
+  .aim {
+    display: flex; align-items: center; gap: 11px; width: 100%; margin-top: 0;
+    border: 1.5px solid var(--line); border-radius: 100px;
+    background: linear-gradient(135deg, var(--surface-2), var(--surface));
+    padding: 9px 14px 9px 12px; text-align: left; transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .aim:hover { border-color: var(--spark); }
+  .aim.armed {
+    border-color: rgba(74,134,219,.55);
+    background: linear-gradient(135deg, var(--spark-soft), var(--surface));
+    box-shadow: 0 0 0 3px var(--spark-soft);
+  }
+  .aim-ico {
+    width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center;
+    background: var(--surface); color: var(--muted); transition: color .15s, background .15s;
+  }
+  .aim-ico svg { width: 16px; height: 16px; }
+  .aim.armed .aim-ico { background: var(--stage); color: var(--spark-ink); }
   .aim .keycap {
     font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--muted);
-    border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 4px 9px; flex: none;
+    border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 4px 9px; flex: none;
+    box-shadow: 0 1.5px 0 var(--line);
   }
-  .aim.armed .keycap { color: var(--muted); }
   .aim .aim-txt { flex: 1; min-width: 0; }
   .aim .aim-txt b { display: block; font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
-  .aim.armed .aim-txt b { color: var(--accent-ink); }
+  .aim.armed .aim-txt b { color: var(--spark-ink); }
   .aim .aim-txt small { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-  .aim .swap { font-size: 11.5px; font-weight: 500; color: var(--muted); flex: none; padding-right: 4px; }
-  .aim:hover .swap { color: var(--accent-ink); }
+  .aim-r { display: flex; align-items: center; gap: 8px; flex: none; }
+  .aim .swap { font-size: 11.5px; font-weight: 500; color: var(--muted); flex: none; }
+  .aim:hover .swap { color: var(--spark-ink); }
   @keyframes rearm { 0%,100% { transform: scale(1); } 40% { transform: scale(1.02); } }
   .aim.pulse { animation: rearm .34s ease; }
 
   .tally {
-    display: flex; align-items: center; gap: 8px; margin-top: 11px;
+    display: flex; align-items: center; gap: 12px; margin-top: 15px;
     font-size: 12px; color: var(--muted); font-family: var(--mono);
   }
-  .tally .n { flex: 1; }
+  .tally .n { flex: 1; letter-spacing: .01em; }
   .tally .n b { color: var(--ink); font-weight: 500; }
+  .tally .btns { display: flex; align-items: center; gap: 6px; flex: none; }
   .mini {
-    border: 1px solid var(--line); background: var(--card); border-radius: 100px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 100px;
     padding: 6px 13px; font-size: 11.5px; font-weight: 500; font-family: var(--ui);
+    transition: border-color .15s, color .15s, transform .14s cubic-bezier(.34,1.76,.64,1);
   }
-  .mini:hover:not(:disabled) { border-color: var(--ink); }
+  .mini:hover:not(:disabled) { border-color: var(--spark); color: var(--spark-ink); }
+  .mini:active:not(:disabled) { transform: scale(.94); }
   .mini:disabled { opacity: .38; cursor: default; }
 
   /* ============ setup ============ */
   .card-p {
-    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
     padding: 20px; margin-bottom: 14px;
   }
-  .card-p h2 { font-size: 16px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.015em; }
+  .card-p h2 { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em; }
   .card-p .sub { font-size: 12.5px; color: var(--muted); margin: 0 0 15px; line-height: 1.55; }
   input[type=text] {
-    width: 100%; background: var(--ground); border: 1px solid var(--line); border-radius: 10px;
+    width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
     color: var(--ink); padding: 10px 12px; font-family: var(--mono); font-size: 12px;
   }
-  input[type=text]:focus { outline: none; border-color: var(--accent); background: var(--card); }
+  input[type=text]:focus { outline: none; border-color: var(--spark); background: var(--ground); }
+  input[type=text]::placeholder { color: var(--muted); }
   .ghost {
-    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); border-radius: 10px;
     padding: 9px 13px; font-size: 12.5px; font-weight: 500; white-space: nowrap;
+    transition: border-color .15s, color .15s, transform .14s cubic-bezier(.34,1.76,.64,1);
   }
-  .ghost:hover { border-color: var(--ink); }
+  .ghost:hover { border-color: var(--spark); color: var(--spark-ink); }
+  .ghost:active { transform: scale(.96); }
   .go {
-    width: 100%; padding: 15px; border-radius: 100px; border: none; background: var(--accent);
-    color: #fff; font-weight: 600; font-size: 14.5px; transition: filter .15s, transform .12s;
+    width: 100%; padding: 15px; border-radius: 100px; border: none; background: var(--spark);
+    color: #F5F8FF; font-weight: 600; font-size: 14.5px;
+    transition: filter .15s, transform .16s cubic-bezier(.34,1.76,.64,1);
   }
-  .go:hover { filter: brightness(1.08); } .go:active { transform: scale(.988); }
-  .go:disabled { background: #D9D5E4; cursor: default; }
+  .go:hover { filter: brightness(1.08); } .go:active { transform: scale(.95); }
+  .go:disabled { background: var(--surface-2); color: var(--muted); cursor: default; }
   .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 13px; }
-  .chip { border: 1px dashed var(--line); background: var(--ground); border-radius: 100px;
+  .chip { border: 1px dashed var(--line); background: var(--surface-2); color: var(--ink); border-radius: 100px;
           padding: 7px 13px; font-size: 12.5px; font-weight: 500; }
-  .chip:hover { border-style: solid; border-color: var(--accent); color: var(--accent-ink); }
-  .row { display: flex; gap: 8px; align-items: center; background: var(--ground);
+  .chip:hover { border-style: solid; border-color: var(--spark); color: var(--spark-ink); }
+  .row { display: flex; gap: 8px; align-items: center; background: var(--surface-2);
          border: 1px solid var(--line); border-radius: 11px; padding: 8px 8px 8px 12px; margin-bottom: 7px; }
   .row .p { flex: 1; font-family: var(--mono); font-size: 11.5px; word-break: break-all; line-height: 1.45; }
-  .row .tag { font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--accent-ink);
-              background: var(--accent-soft); padding: 3px 8px; border-radius: 100px; }
+  .row .tag { font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--spark-ink);
+              background: var(--spark-soft); padding: 3px 8px; border-radius: 100px; }
   .row label { font-size: 11.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; white-space: nowrap; }
   .row .x { background: none; border: none; color: var(--muted); font-size: 15px; padding: 2px 5px; line-height: 1; }
-  .row .x:hover { color: var(--accent-ink); }
+  .row .x:hover { color: var(--warn); }
   .none { font-size: 12.5px; color: var(--muted); padding: 3px 0 11px; }
   .addrow { display: flex; gap: 7px; margin-top: 9px; }
-  .types { display: flex; gap: 18px; margin: 16px 0 0; font-size: 13.5px; }
+  .types { display: flex; gap: 18px; margin: 16px 0 0; font-size: 13.5px; color: var(--ink); }
   .types label { display: flex; gap: 7px; align-items: center; }
-  .browse { margin-top: 9px; background: var(--ground); border: 1px solid var(--line); border-radius: 11px;
+  .browse { margin-top: 9px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px;
             padding: 11px; max-height: 240px; overflow-y: auto; font-size: 12.5px; display: none; }
   .browse.open { display: block; }
   .browse .at { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 9px; word-break: break-all; }
   .browse .d { padding: 7px 9px; border-radius: 7px; cursor: pointer; }
-  .browse .d:hover { background: var(--card); }
+  .browse .d:hover { background: var(--surface); color: var(--spark-ink); }
   .browse .acts2 { display: flex; gap: 7px; margin-top: 10px; }
-  .warn { color: var(--accent-ink); font-size: 12px; padding: 8px 10px; line-height: 1.55;
-          background: var(--accent-soft); border-radius: 9px; }
+  .warn { color: var(--warn); font-size: 12px; padding: 8px 10px; line-height: 1.55;
+          background: var(--warn-soft); border-radius: 9px; }
 
   /* ============ empty ============ */
   .done { text-align: center; padding: 60px 24px; }
-  .done h2 { font-size: 22px; font-weight: 600; margin: 0 0 8px; letter-spacing: -.02em; }
+  .done h2 { font-family: var(--display); font-size: 23px; font-weight: 600; margin: 0 0 8px; letter-spacing: -.01em; }
   .done p { color: var(--muted); font-size: 13.5px; margin: 0 0 20px; line-height: 1.6; }
 
   /* ============ grid ============ */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; }
   .tile { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; cursor: pointer;
-          border: 2px solid transparent; background: var(--stage); }
+          border: 2px solid transparent; background: var(--surface); transition: border-color .12s, transform .1s; }
+  .tile:hover { transform: translateY(-1px); }
   .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .tile.on { border-color: var(--accent); }
-  .tile.on::after { content: ""; position: absolute; inset: 0; background: var(--accent); opacity: .16; }
+  .tile.on { border-color: var(--spark); }
+  .tile.on::after { content: ""; position: absolute; inset: 0; background: var(--spark); opacity: .18; }
   .tile .nm { position: absolute; left: 0; right: 0; bottom: 0; padding: 15px 6px 5px; z-index: 2;
-    background: linear-gradient(transparent, rgba(20,19,26,.82)); color: #fff;
+    background: linear-gradient(transparent, rgba(0,0,0,.85)); color: #fff;
     font-family: var(--mono); font-size: 8.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bulk { position: sticky; bottom: 0; margin-top: 14px; background: var(--ink); color: #fff;
+  .bulk { position: sticky; bottom: 0; margin-top: 14px; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line);
     border-radius: 100px; padding: 9px 9px 9px 18px; display: flex; align-items: center; gap: 7px;
-    box-shadow: 0 10px 30px -8px rgba(20,19,26,.5); font-size: 12.5px; font-weight: 500; font-family: var(--mono); }
+    box-shadow: 0 10px 30px -8px rgba(32,38,52,.22); font-size: 12.5px; font-weight: 500; font-family: var(--mono); }
   .bulk .sp { flex: 1; }
-  .bulk button { background: rgba(255,255,255,.14); border: none; color: #fff; border-radius: 100px;
+  .bulk button { background: var(--surface-2); border: none; color: var(--ink); border-radius: 100px;
                  padding: 8px 14px; font-size: 12px; font-weight: 500; font-family: var(--ui); }
-  .bulk button:hover { background: rgba(255,255,255,.26); }
-  .bulk button.pri { background: var(--accent); }
+  .bulk button:hover { background: var(--line); }
+  .bulk button.pri { background: var(--spark); color: #F5F8FF; }
 
   /* ============ picker sheet ============ */
-  .scrim { position: fixed; inset: 0; background: rgba(20,19,26,.4); backdrop-filter: blur(4px);
+  .scrim { position: fixed; inset: 0; background: rgba(22,26,34,.45); backdrop-filter: blur(5px);
            display: none; align-items: flex-end; justify-content: center; z-index: 50; padding: 16px; }
   .scrim.open { display: flex; }
-  .sheet { background: var(--card); border-radius: 22px; width: 100%; max-width: 560px; padding: 22px;
+  .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; width: 100%; max-width: 560px; padding: 22px;
            max-height: 84vh; overflow-y: auto; animation: rise .22s cubic-bezier(.2,.8,.3,1);
-           box-shadow: 0 -10px 44px rgba(20,19,26,.26); }
+           box-shadow: 0 -10px 50px rgba(32,38,52,.22); }
   @keyframes rise { from { transform: translateY(30px); opacity: 0; } }
-  .sheet h2 { font-size: 18px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.015em; }
+  .sheet h2 { font-family: var(--display); font-size: 19px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em; }
   .sheet .sub { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; line-height: 1.55; }
   .dest {
-    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-    background: var(--ground); border: 1.5px solid var(--line); border-radius: 13px;
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; color: var(--ink);
+    background: var(--surface-2); border: 1.5px solid var(--line); border-radius: 13px;
     padding: 12px 14px; margin-bottom: 8px; transition: border-color .15s, background .15s;
   }
-  .dest:hover { border-color: var(--accent); background: var(--accent-soft); }
-  .dest.on { border-color: var(--accent); background: var(--accent-soft); }
-  .dest .n { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--accent-ink);
-    background: var(--accent-soft); border-radius: 7px; width: 25px; height: 25px;
+  .dest:hover { border-color: var(--spark); background: var(--spark-soft); }
+  .dest.on { border-color: var(--spark); background: var(--spark-soft); }
+  .dest .n { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--spark-ink);
+    background: var(--spark-soft); border-radius: 7px; width: 25px; height: 25px;
     display: grid; place-items: center; flex: none; }
   .dest .t { flex: 1; min-width: 0; }
   .dest .t b { display: block; font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
   .dest .t small { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted);
                    word-break: break-all; margin-top: 1px; }
-  .dest .now { font-family: var(--mono); font-size: 9.5px; color: var(--accent-ink); flex: none; }
+  .dest .now { font-family: var(--mono); font-size: 9.5px; color: var(--spark-ink); flex: none; }
 
   .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(72px);
-    background: var(--ink); color: #fff; padding: 11px 20px; border-radius: 100px; font-size: 13px;
+    background: var(--surface); border: 1px solid var(--line); color: var(--ink); padding: 11px 20px; border-radius: 100px; font-size: 13px;
     font-weight: 500; opacity: 0; transition: transform .26s cubic-bezier(.2,.8,.3,1), opacity .26s;
-    z-index: 70; pointer-events: none; max-width: 90vw; }
+    z-index: 70; pointer-events: none; max-width: 90vw; box-shadow: 0 12px 34px -10px rgba(32,38,52,.22); }
   .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   .hidden { display: none !important; }
 
@@ -264,9 +466,9 @@
     *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
   }
   @media (max-width: 520px) {
-    .stage { padding: 14px 14px 10px; }
+    .stage { padding: 16px 16px 10px; }
     .dock { padding: 12px 16px 14px; }
-    .acts { gap: 10px; } .act { width: 48px; height: 48px; } .act.keep { width: 54px; height: 54px; }
+    .acts { gap: 10px; } .act { width: 48px; height: 48px; } .act.keep { width: 54px; height: 54px; margin-left: 6px; }
   }
 </style>
 </head>
@@ -275,8 +477,23 @@
 <div class="top">
   <h1 class="wordmark">screenshot <b>triage</b></h1>
   <div class="topright">
+    <button class="help-btn" id="to-shortcuts" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">?</button>
     <button class="mini" id="to-setup">Folders and setup</button>
-    <div class="vault">nothing is deleted<br><b id="vault">quarantine empty</b></div>
+    <div class="vault-wrap">
+      <button class="vault-btn" id="vault-btn" aria-describedby="vault-hint">nothing is deleted<br><b id="vault">quarantine empty</b></button>
+      <div class="vault-hint" id="vault-hint" role="tooltip">
+        <div id="vault-info">Thrown-out files move to a quarantine folder inside this app. Nothing is deleted, and nothing leaves that folder unless you send it to the Trash yourself. <b style="color:var(--ink)">Z</b> brings the last one back.<code id="vault-path"></code>
+          <button class="vault-trash-btn" id="vault-trash-btn" disabled>Move all <span id="vault-trash-n">0</span> to Trash</button>
+        </div>
+        <div id="vault-confirm" class="hidden">
+          <p><b id="vault-confirm-n" style="color:var(--ink)"></b> These go to the macOS Trash, where you can still get them back. This app itself never deletes.</p>
+          <div class="vault-confirm-row">
+            <button class="vault-confirm-cancel" id="vault-confirm-cancel">Cancel</button>
+            <button class="vault-confirm-trash" id="vault-confirm-trash">Trash them</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -360,11 +577,11 @@
       </button>
       <button class="act" data-act="rename" title="Rename">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-        <span class="cap"><b>Rename</b><i>↓</i></span>
+        <span class="cap"><b>Rename</b><i>S or ↓</i></span>
       </button>
       <button class="act" data-act="star" title="Star">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.9 5.9 6.1.9-4.5 4.3 1.1 6.4L12 17.5 6.4 20.5l1.1-6.4L3 9.8l6.1-.9Z"/></svg>
-        <span class="cap"><b>Star</b><i>↑</i></span>
+        <span class="cap"><b>Star</b><i>W or ↑</i></span>
       </button>
       <button class="act keep" data-act="keep" title="Keep">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z"/></svg>
@@ -373,16 +590,18 @@
     </div>
 
     <button class="aim" id="aim">
-      <span class="keycap">space</span>
+      <span class="aim-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg></span>
       <span class="aim-txt"><b id="aim-name">Aim at a folder</b><small id="aim-path">Space files the card into it, every time, until you change it</small></span>
-      <span class="swap" id="aim-swap">choose</span>
+      <span class="aim-r"><span class="keycap">space</span><span class="swap" id="aim-swap">choose</span></span>
     </button>
 
     <div class="tally">
       <div class="n" id="tally"></div>
-      <button class="mini" id="to-grid">Select many</button>
-      <button class="mini" id="undo" disabled>Undo</button>
-      <button class="mini" id="export">Export kept list</button>
+      <div class="btns">
+        <button class="mini" id="to-grid">Select many</button>
+        <button class="mini" id="undo" disabled>Undo</button>
+        <button class="mini" id="export">Export kept list</button>
+      </div>
     </div>
   </div>
 </div>
@@ -401,6 +620,37 @@
   </div>
 </div>
 
+<!-- ================= SHORTCUTS ================= -->
+<div class="scrim" id="shortcuts-scrim">
+  <div class="sheet">
+    <h2>Keyboard shortcuts</h2>
+    <p class="sub">Press <span class="kbd-key">?</span> anytime to bring this back.</p>
+
+    <div class="kbd-group">
+      <h3>Decide</h3>
+      <div class="kbd-row"><span class="kbd-key">A</span><span class="kbd-sep">/</span><span class="kbd-key">&larr;</span><span class="kbd-label">Throw out<small>Quarantined, never deleted. Undo brings it back</small></span></div>
+      <div class="kbd-row"><span class="kbd-key">D</span><span class="kbd-sep">/</span><span class="kbd-key">&rarr;</span><span class="kbd-label">Keep</span></div>
+      <div class="kbd-row"><span class="kbd-key">W</span><span class="kbd-sep">/</span><span class="kbd-key">&uarr;</span><span class="kbd-label">Star</span></div>
+      <div class="kbd-row"><span class="kbd-key">S</span><span class="kbd-sep">/</span><span class="kbd-key">&darr;</span><span class="kbd-label">Rename</span></div>
+    </div>
+
+    <div class="kbd-group">
+      <h3>File</h3>
+      <div class="kbd-row"><span class="kbd-key">space</span><span class="kbd-label">File into the aimed folder</span></div>
+      <div class="kbd-row"><span class="kbd-key">1</span><span class="kbd-sep">&ndash;</span><span class="kbd-key">9</span><span class="kbd-label">Aim + file into that folder</span></div>
+      <div class="kbd-row"><span class="kbd-key">C</span><span class="kbd-label">Change aim</span></div>
+    </div>
+
+    <div class="kbd-group">
+      <h3>Select &amp; undo</h3>
+      <div class="kbd-row"><span class="kbd-key">G</span><span class="kbd-label">Select many (grid)</span></div>
+      <div class="kbd-row"><span class="kbd-key">Z</span><span class="kbd-label">Undo</span></div>
+    </div>
+
+    <button class="ghost" id="shortcuts-x" style="width:100%;margin-top:16px;padding:11px;">Close, Esc</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -409,7 +659,15 @@ const $ = (id) => document.getElementById(id);
 let folders = [], destinations = [], armed = null;
 let queue = [], counts = {}, problems = [], queueTotal = 0, historyDepth = 0;
 let current = null, renaming = false, browseAt = null, browseFor = 'src';
-let mode = 'setup', selected = new Set(), pickerFor = 'aim';
+let mode = 'setup', selected = new Set(), pickerFor = 'aim', quarantinePath = '';
+// Identity of what the stage last actually painted (current card + the one peeking
+// behind it). A swipe settles through two independent paths -- the CSS
+// transitionend/420ms-safety-net callback, and the ~260ms-after-fetch refresh() --
+// and both call drawStage() with no coordination between them. When they land close
+// together (the common case) the second call was rebuilding an already-correct
+// stage from scratch, which restarts the incoming card's land reveal animation a
+// second time: a bright card snaps back dim and re-animates in, reading as a blink.
+let stageKey = null;
 
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const base = (p) => p.replace(/\/+$/,'').split('/').pop() || p;
@@ -518,6 +776,7 @@ function apply(d) {
   armed = d.config.armed || null;
   queue = d.queue; queueTotal = d.queue_total; counts = d.counts;
   historyDepth = d.history_depth; problems = d.problems || [];
+  if (d.quarantine) { quarantinePath = d.quarantine; $('vault-path').textContent = tilde(quarantinePath); }
   $('t-img').checked = d.config.types.includes('images');
   $('t-csv').checked = d.config.types.includes('csvs');
   current = queue[0] || null;
@@ -526,8 +785,42 @@ function apply(d) {
 }
 const refresh = async () => apply(await (await fetch('/api/state')).json());
 
-/* ---------------- stage ---------------- */
-function drawStage(fly) {
+/* ---------------- stage: a stack of cards, the top one live ---------------- */
+function peekHtml(it, n) {
+  if (!it) return '';
+  const inner = it.category === 'image'
+    ? `<img loading="lazy" src="/api/image?id=${it.id}" alt="">`
+    : `<span class="ext">${esc(it.ext.replace('.','').toUpperCase())}</span>`;
+  return `<div class="peek peek-${n}">${inner}</div>`;
+}
+async function drawStage(fly) {
+  // Skip a rebuild that would just recreate the identical card + peek already
+  // painted -- see stageKey comment above. A caller that wants to force a fresh
+  // paint (a real fly-out) passes `fly`, which always proceeds.
+  //
+  // Before touching the DOM at all, pre-decode the incoming card off-screen.
+  // Even a cached image needs a fresh decode the moment a brand-new <img>
+  // element is pointed at it, and a card that got skipped over mid-burst
+  // (never shown as the dim peek first, so never pre-decoded) hits that decode
+  // cold, right at swap time -- that's the one-frame gap that reads as a flash.
+  // The old stage stays exactly as painted, decoded pixels and all, for the
+  // whole wait, so there's nothing to blink. If more keys land while we're
+  // waiting, `current` moves on without us; loop and decode the real target
+  // instead of painting a stale card. Capped at 400ms (matches the existing
+  // fly-out safety net) so one bad image can't wedge the stage open forever.
+  let key, it;
+  for (;;) {
+    key = current ? current.id + '|' + (queue[1] ? queue[1].id : '') : '';
+    if (!fly && key === stageKey) return;
+    it = current;
+    if (it && it.category === 'image') {
+      const pre = new Image();
+      pre.src = `/api/image?id=${it.id}`;
+      await Promise.race([pre.decode().catch(() => {}), new Promise(res => setTimeout(res, 400))]);
+    }
+    if (current === it) break;
+  }
+  stageKey = key;
   const s = $('stage'); renaming = false;
   if (!current) {
     s.innerHTML = `<div class="done">
@@ -537,14 +830,83 @@ function drawStage(fly) {
     </div>`;
     return;
   }
-  const it = current;
-  s.innerHTML = `<div class="flyer ${fly||''}" id="flyer">` + (it.category === 'image'
-    ? `<img class="shot" id="shotimg" src="/api/image?id=${it.id}" alt="">`
-    : `<div class="noshot"><span class="ext">${esc(it.ext.replace('.','').toUpperCase())}</span>no preview for this format<br>the name and size still apply</div>`)
-    + `</div>`;
+  s.innerHTML = `<div class="stack">
+      ${peekHtml(queue[1], 1)}
+      <div class="flyer ${fly||''}" id="flyer"><div class="cardface">` + (it.category === 'image'
+        ? `<img class="shot" id="shotimg" src="/api/image?id=${it.id}" alt="">`
+        : `<div class="noshot"><span class="ext">${esc(it.ext.replace('.','').toUpperCase())}</span>no preview for this format<br>the name and size still apply</div>`)
+      + `<div class="stampbox"></div></div></div>
+    </div>`;
   const img = $('shotimg');
-  if (img) img.onerror = () => { $('flyer').innerHTML =
-    `<div class="noshot"><span class="ext">${esc(it.ext.replace('.','').toUpperCase())}</span>this browser cannot decode it<br>the name and size still apply</div>`; };
+  if (img) {
+    img.onload = syncStamp;
+    img.onerror = () => {
+      img.replaceWith(Object.assign(document.createElement('div'), { className: 'noshot',
+        innerHTML: `<span class="ext">${esc(it.ext.replace('.','').toUpperCase())}</span>this browser cannot decode it<br>the name and size still apply` }));
+      syncStamp();
+    };
+  }
+  syncStamp();
+  armDrag();
+}
+/* Keeps .stampbox pinned to the exact rendered rect of the current img/noshot
+   block, so the keep/pass/star stamp anchors to the visible photo's own
+   corners rather than the full-bleed cardface box -- matters for images far
+   from the stage's own aspect ratio (a tall phone shot, a wide banner). */
+function syncStamp() {
+  const face = document.querySelector('.cardface');
+  const box = document.querySelector('.stampbox');
+  if (!face || !box) return;
+  const content = face.querySelector('#shotimg, .noshot');
+  if (!content) return;
+  const fr = face.getBoundingClientRect(), cr = content.getBoundingClientRect();
+  box.style.left = (cr.left - fr.left) + 'px';
+  box.style.top = (cr.top - fr.top) + 'px';
+  box.style.width = cr.width + 'px';
+  box.style.height = cr.height + 'px';
+}
+/* ResizeObserver on the (stable, never-recreated) .stage element, not a
+   window 'resize' listener -- cardface's size is 100% derived from stage's,
+   and observing the actual box lets this track viewport resizes, sidebar
+   shifts, or a devtools-driven viewport override uniformly, without relying
+   on a 'resize' event that isn't always dispatched by every resize path. */
+new ResizeObserver(syncStamp).observe($('stage'));
+
+/* Drag-to-swipe: right = keep, left = throw out, up = star. A gesture is just
+   a faster way to spell the same three actions the keyboard already has, so
+   it reuses act() and never invents a new code path to keep in sync. */
+function armDrag() {
+  const f = $('flyer'); if (!f) return;
+  const T = 96;
+  let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, pid = null;
+  const cls = () => {
+    f.classList.toggle('drag-keep', dx > 20 && dx > Math.abs(dy));
+    f.classList.toggle('drag-out',  dx < -20 && Math.abs(dx) > Math.abs(dy));
+    f.classList.toggle('drag-star', dy < -20 && Math.abs(dy) >= Math.abs(dx));
+  };
+  const clear = () => f.classList.remove('drag-keep', 'drag-out', 'drag-star');
+  f.addEventListener('pointerdown', e => {
+    if (e.button) return;
+    dragging = true; sx = e.clientX; sy = e.clientY; dx = 0; dy = 0; pid = e.pointerId;
+    f.setPointerCapture(pid); f.style.transition = 'none';
+  });
+  f.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    dx = e.clientX - sx; dy = e.clientY - sy;
+    f.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
+    cls();
+  });
+  const release = () => {
+    if (!dragging) return;
+    dragging = false; clear();
+    if (dx > T && dx > Math.abs(dy)) { act('keep'); return; }
+    if (dx < -T && Math.abs(dx) > Math.abs(dy)) { act('remove'); return; }
+    if (dy < -T && Math.abs(dy) >= Math.abs(dx)) { act('star'); return; }
+    f.style.transition = 'transform .3s cubic-bezier(.2,.8,.3,1)';
+    f.style.transform = '';
+  };
+  f.addEventListener('pointerup', release);
+  f.addEventListener('pointercancel', release);
 }
 
 function drawDock() {
@@ -557,7 +919,15 @@ function drawDock() {
   $('tally').innerHTML = `<b>${queueTotal}</b> to go · <b>${counts.kept||0}</b> kept · <b>${counts.filed||0}</b> filed · <b>${counts.removed||0}</b> out`;
   $('undo').disabled = historyDepth === 0;
   $('vault').textContent = counts.removed ? `${counts.removed} in quarantine` : 'quarantine empty';
+  $('vault-trash-n').textContent = counts.removed || 0;
+  $('vault-trash-btn').disabled = !counts.removed;
   drawAim();
+}
+
+function closeVaultTrash() {
+  $('vault-hint').classList.remove('open');
+  $('vault-confirm').classList.add('hidden');
+  $('vault-info').classList.remove('hidden');
 }
 
 function drawAim(pulse) {
@@ -597,14 +967,31 @@ async function endRename() {
 // the server once the burst settles. Without this, two quick presses both land
 // on the same file: the second one re-files what the first already moved.
 let inflight = 0;
+const STAMP = { remove: 'drag-out', keep: 'drag-keep', star: 'drag-star', move: 'drag-file' };
 
 async function act(action, extra) {
   if (!current) return;
   if (action === 'rename') return renameNow(extra);
 
+  // Cheap, once-ever orientation: the first thing you throw out, say where it went.
+  if (action === 'remove' && !counts.removed) toast('Sent to quarantine: ' + tilde(quarantinePath));
+
   const target = current;
   const fly = { remove:'go-remove', keep:'go-keep', star:'go-star', move:'go-move' }[action];
-  const f = $('flyer'); if (f && fly) f.classList.add(fly);
+  const f = $('flyer');
+  // Only the first press in a fast burst claims this card's exit animation --
+  // later presses in the same burst just advance state and ride along, same
+  // "reconcile once the burst settles" idea the network call below already uses.
+  // Without this, rapid keys keep restacking go-*/drag-* classes onto the SAME
+  // not-yet-replaced card, which is what produced the double-exposure glitch.
+  if (f && fly && !f.classList.contains('flying')) {
+    f.style.transition = ''; f.style.transform = '';
+    f.classList.add('flying', fly, STAMP[action]);
+    let settled = false;
+    const settle = () => { if (settled) return; settled = true; drawStage(); drawDock(); };
+    f.addEventListener('transitionend', settle, { once: true });
+    setTimeout(settle, 420); // safety net if the transition never fires
+  }
 
   // Optimistic advance. The card leaving and the next one arriving are local.
   queue.shift();
@@ -613,7 +1000,6 @@ async function act(action, extra) {
   counts[action === 'remove' ? 'removed' : action === 'move' ? 'filed' : 'kept'] =
     (counts[action === 'remove' ? 'removed' : action === 'move' ? 'filed' : 'kept'] || 0) + 1;
   historyDepth++;
-  setTimeout(() => { drawStage(); drawDock(); }, fly ? 230 : 0);
 
   inflight++;
   const r = await fetch('/api/action', { method:'POST', headers:{'Content-Type':'application/json'},
@@ -655,6 +1041,41 @@ document.querySelectorAll('.act').forEach(b =>
   b.onclick = () => b.dataset.act === 'rename' ? startRename() : act(b.dataset.act));
 $('aim').onclick = () => openPicker('aim');
 $('to-setup').onclick = () => { show('setup'); $('browse').classList.remove('open'); };
+$('vault-btn').onclick = () => $('vault-hint').classList.toggle('open');
+document.addEventListener('click', e => { if (!e.target.closest('.vault-wrap')) closeVaultTrash(); });
+
+/* ---------------- move quarantined files to Trash ---------------- */
+$('vault-trash-btn').onclick = () => {
+  const n = counts.removed || 0;
+  $('vault-confirm-n').textContent = `${n} file${n === 1 ? '' : 's'}.`;
+  $('vault-info').classList.add('hidden');
+  $('vault-confirm').classList.remove('hidden');
+};
+$('vault-confirm-cancel').onclick = () => {
+  $('vault-confirm').classList.add('hidden');
+  $('vault-info').classList.remove('hidden');
+};
+$('vault-confirm-trash').onclick = async () => {
+  $('vault-confirm-trash').disabled = true;
+  const r = await fetch('/api/quarantine/clear', { method: 'POST' });
+  const d = await r.json();
+  $('vault-confirm-trash').disabled = false;
+  if (!r.ok) { toast(d.error || 'Could not empty quarantine'); return; }
+  closeVaultTrash();
+  let msg = d.moved === 1 ? '1 file moved to the Trash' : `${d.moved} files moved to the Trash`;
+  if (d.failed) msg += `, ${d.failed} failed`;
+  toast(msg);
+  await refresh();
+};
+
+/* ---------------- shortcuts overlay ---------------- */
+const shortcutsOpen = () => $('shortcuts-scrim').classList.contains('open');
+const openShortcuts = () => $('shortcuts-scrim').classList.add('open');
+const closeShortcuts = () => $('shortcuts-scrim').classList.remove('open');
+const toggleShortcuts = () => $('shortcuts-scrim').classList.toggle('open');
+$('to-shortcuts').onclick = toggleShortcuts;
+$('shortcuts-x').onclick = closeShortcuts;
+$('shortcuts-scrim').onclick = e => { if (e.target === $('shortcuts-scrim')) closeShortcuts(); };
 $('to-grid').onclick = () => { selected.clear(); show('grid'); drawGrid(); };
 $('grid-back').onclick = () => { selected.clear(); show('review'); };
 $('export').onclick = () => (counts.kept||counts.filed) ? window.location='/api/export' : toast('Nothing kept yet');
@@ -738,6 +1159,10 @@ window.addEventListener('keydown', e => {
     else if (e.key === 'Escape') { e.preventDefault(); renaming = false; drawDock(); }
     return;
   }
+  if (shortcutsOpen()) {
+    if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); closeShortcuts(); }
+    return; // every other key is inert while the overlay is up
+  }
   if ($('scrim').classList.contains('open')) {
     if (e.key === 'Escape') { e.preventDefault(); closePicker(); return; }
     if (a && a.tagName === 'INPUT') return;
@@ -746,6 +1171,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+  if (e.key === '?') { e.preventDefault(); openShortcuts(); return; }
 
   if (mode === 'grid') {
     if (e.key === 'Escape') { e.preventDefault(); $('grid-back').click(); }
@@ -764,8 +1190,8 @@ window.addEventListener('keydown', e => {
   if (!current) return;
   if (e.key === 'ArrowLeft'  || k === 'a') { e.preventDefault(); act('remove'); }
   else if (e.key === 'ArrowRight' || k === 'd') { e.preventDefault(); act('keep'); }
-  else if (e.key === 'ArrowUp')   { e.preventDefault(); act('star'); }
-  else if (e.key === 'ArrowDown') { e.preventDefault(); startRename(); }
+  else if (e.key === 'ArrowUp'   || k === 'w') { e.preventDefault(); act('star'); }
+  else if (e.key === 'ArrowDown' || k === 's') { e.preventDefault(); startRename(); }
   else if (e.key === ' ')         { e.preventDefault(); fileIt(); }
 });
 

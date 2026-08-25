@@ -254,6 +254,60 @@ def set_finder_label(path, label_index):
         return False
 
 
+def trash_files(paths):
+    """Move files to the macOS Trash, recoverable there, via one Finder/osascript call
+    for all of them. TRIAGE_TRASH_DIR overrides this with a plain move into that folder,
+    so tests never have to actually touch the real Trash. Returns (moved, failed)."""
+    override = os.environ.get("TRIAGE_TRASH_DIR")
+    if override:
+        os.makedirs(override, exist_ok=True)
+        moved, failed = [], []
+        for p in paths:
+            try:
+                shutil.move(p, free_path(override, os.path.basename(p)))
+                moved.append(p)
+            except OSError as e:
+                failed.append({"path": p, "error": str(e)})
+        return moved, failed
+
+    existing = [p for p in paths if os.path.exists(p)]
+    failed = [{"path": p, "error": "not found"} for p in paths if p not in existing]
+    if not existing:
+        return [], failed
+    items = ", ".join(
+        'POSIX file "%s"' % p.replace("\\", "\\\\").replace('"', '\\"') for p in existing
+    )
+    script = f'tell application "Finder" to delete {{{items}}}'
+    try:
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=30, check=True)
+        return existing, failed
+    except Exception as e:
+        print(f"[warn] Trash failed: {e}", file=sys.stderr)
+        return [], failed + [{"path": p, "error": str(e)} for p in existing]
+
+
+def do_quarantine_clear():
+    """Empty the quarantine folder into the macOS Trash. Every quarantine record is
+    dropped from state, and any pending undo that would restore one of those files
+    is left in place but made to refuse cleanly (see do_undo) instead of moving a
+    file that is no longer there."""
+    if sys.platform != "darwin" and not os.environ.get("TRIAGE_TRASH_DIR"):
+        return {"error": "Only supported on macOS"}, 400
+    with STATE_LOCK:
+        removed = [(iid, item) for iid, item in STATE["items"].items() if item["status"] == "removed"]
+        if not removed:
+            return {"moved": 0, "failed": 0}, 200
+        moved, failed = trash_files([item["path"] for _, item in removed])
+        moved_set = set(moved)
+        moved_count = 0
+        for iid, item in removed:
+            if item["path"] in moved_set:
+                item["status"] = "trashed"
+                moved_count += 1
+        save_state(STATE)
+        return {"moved": moved_count, "failed": len(failed)}, 200
+
+
 def free_path(directory, name):
     """~/Receipts/shot.png exists already, so become shot 2.png rather than clobber it."""
     candidate = os.path.join(directory, name)
@@ -366,7 +420,12 @@ def do_undo():
     with STATE_LOCK:
         if not STATE["history"]:
             return {"error": "nothing to undo"}, 400
-        entry = STATE["history"].pop()
+        entry = STATE["history"][-1]
+        for op in entry["ops"]:
+            item = STATE["items"].get(op["id"])
+            if op["physical"] == "remove" and item and item.get("status") == "trashed":
+                return {"error": "That file was moved to the Trash and can't be restored from here."}, 400
+        STATE["history"].pop()
         undone, errors = 0, []
         for op in reversed(entry["ops"]):
             item_id, prev = op["id"], op["prev"]
@@ -572,6 +631,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(result, status)
         elif route == "/api/undo":
             result, status = do_undo()
+            self._send_json(result, status)
+        elif route == "/api/quarantine/clear":
+            result, status = do_quarantine_clear()
+            if status == 200:
+                result["counts"] = queue_snapshot()["counts"]
             self._send_json(result, status)
         else:
             self.send_response(404)
