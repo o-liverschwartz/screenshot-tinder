@@ -301,9 +301,9 @@ def run_scan(config):
             if problem:
                 problems.append({"path": folder["path"], "problem": problem})
 
-        # The queue is "what is waiting for review in the folders you asked me to
-        # look at". Take a folder off the list and its files have to leave the
-        # queue with it, or changing folders visibly does nothing. This also covers
+        # The queue is defined as what the configured folders currently hold. Take
+        # a folder off the list and its files have to leave the queue with it, or
+        # changing folders visibly does nothing. This also covers
         # a pending file that was moved or deleted behind the app's back: it simply
         # is not in what the scan found.
         #

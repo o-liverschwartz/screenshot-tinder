@@ -1,5 +1,4 @@
-# Your queue, your paths, your quarantined files, and the thumbnail cache built
-# from your own images. None of it belongs in git.
+# Local state, scan queue and thumbnail cache. Machine-specific, never committed.
 data/
 
 # Python
