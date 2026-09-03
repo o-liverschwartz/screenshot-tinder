@@ -26,3 +26,8 @@ env/
 # Local scratch
 .backup/
 *.log
+
+# Working screenshots. docs/card.png is the only image the repo carries.
+docs/refinement-*/
+docs/**/*.png
+!docs/card.png

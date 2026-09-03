@@ -521,7 +521,11 @@
      tiles for free -- no scroll offset maths anywhere in the drag code. */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 10px;
           position: relative; }
-  .tile { position: relative; aspect-ratio: 1; border-radius: var(--r-sm); overflow: hidden; cursor: pointer;
+  /* isolation, so the label's z-index below stays inside its own tile. Without it
+     .nm escapes to the nearest stacking context and paints over the sticky bulk
+     bar, which is a sibling of the grid with no z-index of its own. */
+  .tile { position: relative; isolation: isolate;
+          aspect-ratio: 1; border-radius: var(--r-sm); overflow: hidden; cursor: pointer;
           border: 2px solid transparent; background: var(--surface);
           box-shadow: 0 1px 2px rgba(32,38,52,.10);
           transition: border-color .15s, transform .15s var(--ease-in-out), box-shadow .15s; }
@@ -543,7 +547,7 @@
     background: linear-gradient(transparent, rgba(0,0,0,.88)); color: #fff;
     font-family: var(--mono); font-size: var(--t-key); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     direction: rtl; text-align: left; }
-  .bulk { position: sticky; bottom: 0; margin-top: 16px; background: var(--surface); color: var(--ink);
+  .bulk { position: sticky; bottom: 0; z-index: 10; margin-top: 16px; background: var(--surface); color: var(--ink);
     border: 1px solid var(--line);
     border-radius: var(--r-pill); padding: 9px 9px 9px 20px; display: flex; align-items: center; gap: 8px;
     box-shadow: 0 10px 30px -8px rgba(32,38,52,.22); font-size: var(--t-sm); font-weight: 500; font-family: var(--mono); }
@@ -714,6 +718,23 @@
       <div class="addrow"><button class="ghost" id="star-save">Save</button></div>
     </div>
 
+    <div class="card-p">
+      <h2>Thumbnail cache</h2>
+      <p class="sub">The grid loads small copies instead of full-size originals, which is the only reason it is quick. They are copies of the images being reviewed, so they are kept in the system cache folder and cleared on a schedule.</p>
+      <label class="sub" style="display:flex;gap:8px;align-items:center;margin:0 0 14px;">
+        <input type="checkbox" id="th-on"> use thumbnails
+      </label>
+      <div id="th-body">
+        <p class="sub" style="margin:0 0 8px;">Clear them</p>
+        <div class="affix" id="th-ttl"></div>
+      </div>
+      <div class="preview" id="th-stat"></div>
+      <div class="addrow">
+        <button class="ghost" id="th-clear">Clear now</button>
+        <button class="ghost" id="th-save">Save</button>
+      </div>
+    </div>
+
     <button class="go" id="start">Start reviewing</button>
   </section>
 
@@ -838,6 +859,7 @@ let mode = 'setup', selected = new Set(), pickerFor = 'aim', quarantinePath = ''
 let appDir = '', defaultQuarantine = '';
 let star = { mode: 'label', color: 2, affix: 'prefix', text: '\u2605 ' };
 let starColors = [], finderLabels = true;
+let thumbs = { enabled: true, ttl_days: 7, files: 0, bytes: 0, dir: '', choices: [] };
 // Identity of what the stage last actually painted (current card + the one peeking
 // behind it). A swipe settles through two independent paths -- the CSS
 // transitionend/420ms-safety-net callback, and the ~260ms-after-fetch refresh() --
@@ -968,6 +990,44 @@ $('quar-save').onclick = async () => {
   if (!r.ok) return toast(d.error || 'Could not use that folder');
   apply(d); $('quar').value = quarantinePath; drawQuarNote();
   toast('Thrown-out files now wait in ' + base(quarantinePath));
+};
+
+/* ---------------- thumbnail cache ---------------- */
+const loadThumbs = async () => { thumbs = await (await fetch('/api/thumbs')).json(); drawThumbs(); };
+
+function drawThumbs() {
+  $('th-on').checked = !!thumbs.enabled;
+  $('th-body').classList.toggle('hidden', !thumbs.enabled);
+  const row = $('th-ttl'); row.innerHTML = '';
+  (thumbs.choices || []).forEach(c => {
+    const b = document.createElement('button');
+    b.textContent = c.label;
+    b.className = c.days === thumbs.ttl_days ? 'on' : '';
+    b.title = c.hint || '';
+    b.onclick = () => { thumbs.ttl_days = c.days; drawThumbs(); };
+    row.appendChild(b);
+  });
+  const c = (thumbs.choices || []).find(x => x.days === thumbs.ttl_days);
+  $('th-stat').innerHTML = !thumbs.enabled
+    ? `<i>Off. The grid loads full-size originals, which is slower, and no copies are written to disk.</i>`
+    : `<b>${thumbs.files}</b> <i>cached,</i> <b>${size(thumbs.bytes)}</b><br>`
+      + `<i>in</i> ${esc(tilde(thumbs.dir || ''))}<br>`
+      + `<i>cleared ${esc((c ? c.label : '').toLowerCase())}${c && c.hint ? ', ' + esc(c.hint) : ''}, and whenever a file leaves the queue</i>`;
+}
+
+$('th-on').onchange = e => { thumbs.enabled = e.target.checked; drawThumbs(); };
+$('th-clear').onclick = async () => {
+  const d = await (await fetch('/api/thumbs/clear', { method: 'POST' })).json();
+  thumbs = { ...thumbs, ...d.stats }; drawThumbs();
+  toast(d.removed ? `Cleared ${d.removed} thumbnails, ${size(d.freed)}` : 'Already empty');
+};
+$('th-save').onclick = async () => {
+  const r = await fetch('/api/destinations', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ destinations, armed, thumbnails: thumbs.enabled, thumb_ttl_days: thumbs.ttl_days }) });
+  const d = await r.json();
+  if (!r.ok) return toast(d.error || 'Could not save that');
+  apply(d); await loadThumbs();
+  toast(thumbs.enabled ? 'Saved' : 'Thumbnails off, cache cleared');
 };
 
 /* ---------------- what starring does ---------------- */
@@ -1402,7 +1462,7 @@ $('undo').onclick = async () => {
 document.querySelectorAll('.act').forEach(b =>
   b.onclick = () => b.dataset.act === 'rename' ? startRename() : act(b.dataset.act));
 $('aim').onclick = () => openPicker('aim');
-$('to-setup').onclick = () => { show('setup'); $('browse').classList.remove('open'); };
+$('to-setup').onclick = () => { show('setup'); $('browse').classList.remove('open'); loadThumbs(); };
 $('vault-btn').onclick = () => $('vault-hint').classList.toggle('open');
 document.addEventListener('click', e => { if (!e.target.closest('.vault-wrap')) closeVaultTrash(); });
 
@@ -1699,6 +1759,7 @@ window.addEventListener('keydown', e => {
 /* ---------------- boot ---------------- */
 (async () => {
   await loadChips();
+  await loadThumbs();
   apply(await (await fetch('/api/state')).json());
   show(queueTotal > 0 && folders.length ? 'review' : 'setup');
 })();

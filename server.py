@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -27,7 +28,18 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 STATE_FILE = os.path.join(DATA_DIR, "state.json")
-THUMB_DIR = os.path.join(DATA_DIR, "thumbs")
+
+# Grid thumbnails are a cache: every one of them can be rebuilt from the original
+# in about 70ms, and each is a downscaled copy of somebody's own photo. That means
+# it belongs where the OS already understands caches -- macOS purges ~/Library/
+# Caches under disk pressure without being asked -- and not in the app directory,
+# where an earlier version of this put it.
+LEGACY_THUMB_DIR = os.path.join(DATA_DIR, "thumbs")
+# The cache is now a shared, per-user location, so the test suite has to be able to
+# point somewhere else. Without this, running the tests would wipe a real cache.
+THUMB_DIR = os.environ.get("TRIAGE_CACHE_DIR") or os.path.join(
+    os.path.expanduser("~/Library/Caches" if sys.platform == "darwin" else "~/.cache"),
+    "screenshot-triage", "thumbs")
 
 # Quarantine used to live inside this app folder. That is the wrong place for
 # files we promise never to delete: the app folder is a git checkout, and
@@ -80,6 +92,22 @@ STAR_COLORS = [
 ]
 DEFAULT_STAR = {"mode": "label", "color": 2, "affix": "prefix", "text": "★ "}
 
+# Thumbnails are the whole reason the grid is quick, but they are copies of your
+# images on disk, so turning them off has to be a real option and not a rebuild.
+DEFAULT_THUMBNAILS = True
+
+# How long a thumbnail is allowed to sit on disk. 0 means keep nothing between
+# sessions; -1 means keep one for as long as its file is still waiting to be
+# reviewed, and no longer. Anything else is a number of days.
+THUMB_TTL_CHOICES = [
+    {"days": 0,  "label": "Every launch",   "hint": "nothing is kept between sessions"},
+    {"days": 1,  "label": "After a day",    "hint": ""},
+    {"days": 7,  "label": "After a week",   "hint": ""},
+    {"days": -1, "label": "Keep them",      "hint": "until the file leaves the queue"},
+]
+DEFAULT_THUMB_TTL = 7
+SWEEP_EVERY = 1800   # seconds between the background sweeps
+
 SUGGESTED_FOLDERS = [
     ("Desktop", "~/Desktop"),
     ("Screenshots", "~/Desktop/Screenshots"),
@@ -113,6 +141,8 @@ def migrate_state(state):
     star = config.setdefault("star", dict(DEFAULT_STAR))
     for k, v in DEFAULT_STAR.items():
         star.setdefault(k, v)
+    config.setdefault("thumbnails", DEFAULT_THUMBNAILS)
+    config.setdefault("thumb_ttl_days", DEFAULT_THUMB_TTL)
     state.setdefault("items", {})
     return state
 
@@ -193,6 +223,15 @@ def reconcile_removed():
 _stale = reconcile_removed()
 if _stale:
     save_state(STATE)
+
+# An earlier version cached thumbnails inside the app folder. Nothing in there is
+# anything but a rebuildable copy, so it is retired rather than left to rot.
+if os.path.isdir(LEGACY_THUMB_DIR):
+    try:
+        shutil.rmtree(LEGACY_THUMB_DIR)
+        print(f"[cache] retired the old in-app thumbnail folder", file=sys.stderr)
+    except OSError:
+        pass
 
 
 def excluded_prefixes():
@@ -341,6 +380,8 @@ def run_scan(config):
             existing_paths[path] = True
             added += 1
 
+        sweep_thumbs()
+        expire_thumbs()
         save_state(STATE)
         return added, problems
 
@@ -427,17 +468,143 @@ def do_quarantine_clear():
         return {"moved": moved_count, "failed": len(failed)}, 200
 
 
+def thumb_name(item_id, st):
+    """The cache key is the source file's own mtime and size, so editing or
+    replacing a file invalidates its thumbnail without anything having to notice."""
+    return f"{item_id}-{int(st.st_mtime)}-{st.st_size}.jpg"
+
+
+def thumb_stats():
+    total, count = 0, 0
+    try:
+        with os.scandir(THUMB_DIR) as it:
+            for entry in it:
+                try:
+                    total += entry.stat().st_size
+                    count += 1
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return {"files": count, "bytes": total, "dir": THUMB_DIR,
+            "enabled": bool(STATE["config"].get("thumbnails", DEFAULT_THUMBNAILS)),
+            "ttl_days": STATE["config"].get("thumb_ttl_days", DEFAULT_THUMB_TTL),
+            "choices": THUMB_TTL_CHOICES}
+
+
+def clear_thumbs():
+    """Everything, unconditionally. Nothing here is anything but a rebuildable copy."""
+    freed, removed = 0, 0
+    try:
+        with os.scandir(THUMB_DIR) as it:
+            entries = list(it)
+    except OSError:
+        return {"removed": 0, "freed": 0}
+    for entry in entries:
+        try:
+            size = entry.stat().st_size
+            os.remove(entry.path)
+            freed += size
+            removed += 1
+        except OSError:
+            pass
+    return {"removed": removed, "freed": freed}
+
+
+def expire_thumbs():
+    """The scheduled half. Age is read off the thumbnail's own mtime, so it survives
+    restarts without a ledger to keep in sync."""
+    ttl = STATE["config"].get("thumb_ttl_days", DEFAULT_THUMB_TTL)
+    if ttl < 0:
+        return 0
+    if ttl == 0:
+        return clear_thumbs()["removed"]
+    cutoff = time.time() - ttl * 86400
+    freed, removed = 0, 0
+    try:
+        with os.scandir(THUMB_DIR) as it:
+            entries = list(it)
+    except OSError:
+        return 0
+    for entry in entries:
+        try:
+            st = entry.stat()
+            if st.st_mtime >= cutoff:
+                continue
+            os.remove(entry.path)
+            freed += st.st_size
+            removed += 1
+        except OSError:
+            pass
+    if removed:
+        print(f"[cache] expired {removed} thumbnail(s), {freed // 1024} KB", file=sys.stderr)
+    return removed
+
+
+def sweep_now():
+    """Both halves, under the lock. Startup, every scan, and the background timer."""
+    with STATE_LOCK:
+        return sweep_thumbs() + expire_thumbs()
+
+
+def sweep_loop():
+    while True:
+        time.sleep(SWEEP_EVERY)
+        try:
+            sweep_now()
+        except Exception as e:
+            print(f"[cache] sweep failed: {e}", file=sys.stderr)
+
+
+def sweep_thumbs():
+    """Drop every thumbnail that no longer backs a file waiting to be reviewed.
+    The grid only ever draws pending items, so a thumbnail for anything else is a
+    copy of a photo being kept for no reason. Rebuilding one costs about 70ms.
+
+    Called at startup and after every scan, which are the two moments the set of
+    pending items changes wholesale. Caller holds STATE_LOCK, or is startup."""
+    keep = set()
+    for iid, item in STATE["items"].items():
+        if item["status"] != "pending" or item.get("category") != "image":
+            continue
+        try:
+            keep.add(thumb_name(iid, os.stat(item["path"])))
+        except OSError:
+            continue
+    freed, removed = 0, 0
+    try:
+        with os.scandir(THUMB_DIR) as it:
+            entries = list(it)
+    except OSError:
+        return 0
+    for entry in entries:
+        if entry.name in keep:
+            continue
+        try:
+            size = entry.stat().st_size
+            os.remove(entry.path)
+            freed += size
+            removed += 1
+        except OSError:
+            pass
+    if removed:
+        print(f"[cache] dropped {removed} stale thumbnail(s), {freed // 1024} KB", file=sys.stderr)
+    return removed
+
+
 def thumb_for(item_id, path):
     """A grid of 200 tiles was pulling 200 full-resolution originals over the wire,
     which is the whole reason the grid felt slow. sips ships with macOS, so a 480px
     JPEG costs no dependency; it is cached on disk keyed by the file's own mtime and
     size, so it is generated once. Returns None anywhere sips is unavailable or
     unhappy, and the caller falls back to the original file."""
+    if not STATE["config"].get("thumbnails", DEFAULT_THUMBNAILS):
+        return None
     try:
         st = os.stat(path)
     except OSError:
         return None
-    out = os.path.join(THUMB_DIR, f"{item_id}-{int(st.st_mtime)}-{st.st_size}.jpg")
+    out = os.path.join(THUMB_DIR, thumb_name(item_id, st))
     if os.path.exists(out):
         return out
     tmp = f"{out}.{uuid.uuid4().hex}.tmp.jpg"
@@ -807,6 +974,8 @@ class Handler(BaseHTTPRequestHandler):
         elif route in ("/api/image", "/api/thumb"):
             qs = parse_qs(parsed.query)
             self._serve_image(qs.get("id", [None])[0], thumb=(route == "/api/thumb"))
+        elif route == "/api/thumbs":
+            self._send_json(thumb_stats())
         elif route == "/api/export":
             self._serve_export()
         else:
@@ -876,6 +1045,8 @@ class Handler(BaseHTTPRequestHandler):
                 "armed": body.get("armed"),
                 "quarantine": STATE["config"].get("quarantine"),
                 "star": STATE["config"].get("star"),
+                "thumbnails": STATE["config"].get("thumbnails", DEFAULT_THUMBNAILS),
+                "thumb_ttl_days": STATE["config"].get("thumb_ttl_days", DEFAULT_THUMB_TTL),
             }
             if body.get("quarantine"):
                 path, error = set_quarantine(body["quarantine"])
@@ -889,6 +1060,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(snap)
         elif route == "/api/destinations":
             body = self._read_json()
+            thumbs = None
+            if "thumbnails" in body or "thumb_ttl_days" in body:
+                ttl = body.get("thumb_ttl_days", STATE["config"].get("thumb_ttl_days"))
+                if ttl not in [c["days"] for c in THUMB_TTL_CHOICES]:
+                    self._send_json({"error": "that is not one of the clearing options"}, 400)
+                    return
+                thumbs = (bool(body.get("thumbnails", True)), ttl)
             star = None
             if body.get("star"):
                 star, error = clean_star(body["star"])
@@ -908,7 +1086,15 @@ class Handler(BaseHTTPRequestHandler):
                     STATE["config"]["quarantine"] = quarantine
                 if star:
                     STATE["config"]["star"] = star
+                if thumbs:
+                    STATE["config"]["thumbnails"], STATE["config"]["thumb_ttl_days"] = thumbs
                 save_state(STATE)
+            # Switching thumbnails off has to take the existing copies with it, or
+            # the setting only stops new ones being written.
+            if thumbs and not thumbs[0]:
+                clear_thumbs()
+            elif thumbs:
+                sweep_now()
             self._send_json(queue_snapshot())
         elif route == "/api/action":
             body = self._read_json()
@@ -924,6 +1110,10 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/undo":
             result, status = do_undo()
             self._send_json(result, status)
+        elif route == "/api/thumbs/clear":
+            freed = clear_thumbs()
+            freed["stats"] = thumb_stats()
+            self._send_json(freed)
         elif route == "/api/quarantine/reveal":
             result, status = do_quarantine_reveal()
             self._send_json(result, status)
@@ -968,9 +1158,16 @@ def main():
         print("Could not bind to a port", file=sys.stderr)
         sys.exit(1)
 
+    sweep_now()
+    threading.Thread(target=sweep_loop, daemon=True).start()
+
+    stats = thumb_stats()
+    ttl = stats["ttl_days"]
+    when = next((c["label"] for c in THUMB_TTL_CHOICES if c["days"] == ttl), str(ttl))
     url = f"http://127.0.0.1:{port}/"
     print(f"Screenshot Triage  {url}")
     print(f"Quarantine         {quarantine_dir()}")
+    print(f"Thumbnail cache    {stats['dir']}  ({when.lower()})")
     print("Nothing is deleted. Ctrl+C to stop.")
 
     if not args.no_browser:

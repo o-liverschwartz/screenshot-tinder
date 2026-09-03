@@ -36,8 +36,9 @@ def call(base, path, payload=None):
 
 def main():
     tmp = tempfile.mkdtemp(prefix="triage-test-")
-    app, src, dest, locked, trash_stub, quar = (
-        os.path.join(tmp, n) for n in ("app", "src", "dest", "locked", "trash-stub", "quar"))
+    app, src, dest, locked, trash_stub, quar, cache = (
+        os.path.join(tmp, n) for n in
+        ("app", "src", "dest", "locked", "trash-stub", "quar", "cache"))
     os.makedirs(os.path.join(app, "static"), exist_ok=True)
     os.makedirs(src); os.makedirs(dest); os.makedirs(locked)
     shutil.copy(os.path.join(HERE, "server.py"), app)
@@ -50,7 +51,7 @@ def main():
 
     port = free_port()
     base = f"http://127.0.0.1:{port}"
-    env = {**os.environ, "TRIAGE_TRASH_DIR": trash_stub}
+    env = {**os.environ, "TRIAGE_TRASH_DIR": trash_stub, "TRIAGE_CACHE_DIR": cache}
     proc = subprocess.Popen([sys.executable, "server.py", "--port", str(port), "--no-browser"],
                             cwd=app, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -154,6 +155,59 @@ def main():
                                  "destinations": [{"path": dest, "label": "dest"}],
                                  "armed": dest, "quarantine": quar})
 
+        # --- the thumbnail cache clears itself ---
+        def thumbs_on_disk():
+            return sorted(os.listdir(cache)) if os.path.isdir(cache) else []
+
+        first = call(base, "/api/state")["queue"][0]
+        with urllib.request.urlopen(base + "/api/thumb?id=" + first["id"], timeout=20) as r:
+            assert r.status == 200 and r.read(), "the thumbnail route must serve something"
+        assert len(thumbs_on_disk()) == 1, thumbs_on_disk()
+        assert call(base, "/api/thumbs")["files"] == 1
+        ok("asking for a thumbnail caches exactly one file")
+
+        # A thumbnail whose file is no longer waiting to be reviewed is dead weight.
+        call(base, "/api/action", {"id": first["id"], "action": "keep"})
+        call(base, "/api/scan", {"folders": [{"path": src, "recursive": False}],
+                                 "types": ["images"], "destinations": [], "armed": None,
+                                 "quarantine": quar})
+        assert thumbs_on_disk() == [], thumbs_on_disk()
+        ok("a scan drops thumbnails for files that left the queue")
+
+        # Off means off: no new copies, and the existing ones go.
+        nxt = call(base, "/api/state")["queue"][0]
+        urllib.request.urlopen(base + "/api/thumb?id=" + nxt["id"], timeout=20).read()
+        assert len(thumbs_on_disk()) == 1
+        call(base, "/api/destinations", {"destinations": [], "armed": None, "thumbnails": False,
+                                         "thumb_ttl_days": 7})
+        assert thumbs_on_disk() == [], "turning thumbnails off must clear what is already cached"
+        urllib.request.urlopen(base + "/api/thumb?id=" + nxt["id"], timeout=20).read()
+        assert thumbs_on_disk() == [], "with thumbnails off nothing new may be written"
+        ok("turning thumbnails off clears the cache and stops writing copies")
+
+        call(base, "/api/destinations", {"destinations": [], "armed": None, "thumbnails": True,
+                                         "thumb_ttl_days": 1})
+        urllib.request.urlopen(base + "/api/thumb?id=" + nxt["id"], timeout=20).read()
+        assert len(thumbs_on_disk()) == 1
+        # Age is read off the file's own mtime, so backdating it is a real expiry.
+        old = os.path.join(cache, thumbs_on_disk()[0])
+        os.utime(old, (time.time() - 3 * 86400, time.time() - 3 * 86400))
+        call(base, "/api/scan", {"folders": [{"path": src, "recursive": False}],
+                                 "types": ["images"], "destinations": [], "armed": None,
+                                 "quarantine": quar})
+        assert thumbs_on_disk() == [], "a thumbnail past its age must be swept"
+        ok("thumbnails past the configured age are cleared automatically")
+
+        r = call(base, "/api/destinations", {"destinations": [], "armed": None,
+                                             "thumbnails": True, "thumb_ttl_days": 999})
+        assert "error" in r, r
+        ok("an unknown clearing schedule is refused")
+
+        urllib.request.urlopen(base + "/api/thumb?id=" + nxt["id"], timeout=20).read()
+        r = call(base, "/api/thumbs/clear", {})
+        assert r["removed"] == 1 and thumbs_on_disk() == [], r
+        ok("clear now empties the cache")
+
         # --- what starring does is configurable ---
         r = call(base, "/api/destinations", {"destinations": [], "armed": None,
                                              "star": {"mode": "rename", "affix": "suffix",
@@ -214,7 +268,8 @@ def main():
                                      "types": ["images"],
                                      "destinations": [{"path": dest, "label": "dest"}],
                                      "armed": dest, "quarantine": quar})
-        assert len(r["queue"]) == 5, r["queue_total"]
+        queued = r["queue_total"]
+        assert queued, r
         os.chmod(src, 0o000)
         r = call(base, "/api/scan", {"folders": [{"path": src, "recursive": False}],
                                      "types": ["images"],
@@ -222,7 +277,7 @@ def main():
                                      "armed": dest, "quarantine": quar})
         os.chmod(src, 0o755)
         assert r["problems"], r
-        assert r["queue_total"] == 5, "a denied folder must not empty the queue"
+        assert r["queue_total"] == queued, "a denied folder must not empty the queue"
         ok("a folder the OS denies keeps its files queued instead of dropping them")
 
         # --- a quarantined file that vanished stops being counted, without a scan ---
