@@ -29,13 +29,26 @@ python3 server.py --port 9000 --no-browser
 | --- | --- |
 | `A` or `←` | Throw out. The file moves into a local quarantine folder. |
 | `D` or `→` | Keep. The file stays exactly where it is, marked done. |
-| `↑` | Star. Keeps it and colours it in Finder so you can find it later. |
+| `↑` | Star. Keeps it, and does whatever you set starring to do. |
 | `↓` | Rename, without leaving the card. |
 | `Space` | File it into the folder you aimed at. |
 | `1` – `9` | Aim at a different folder and file this one into it. |
 | `C` | Change what Space is aimed at. |
-| `G` | Select many at once. |
+| `G` | Select many at once, and again to come back. Drag a band across the grid, or shift-click for a run. |
 | `Z` | Undo. |
+
+## What starring does
+
+Star always keeps the file. What else it does is yours to choose under **Folders
+and setup**:
+
+- **Colour it in Finder** — a Finder label in any of the seven colours. Nothing
+  about the file changes, but the mark only exists inside Finder.
+- **Mark the name** — adds text to the filename, at the front or the back, so the
+  mark travels wherever the file goes. At the back means before the extension:
+  `shot.png` becomes `shot-KEEP.png`, never `shot.png-KEEP`.
+
+Either way `Z` undoes it, label and rename alike.
 
 ## Aiming
 
@@ -46,10 +59,16 @@ Destinations are created if they do not exist, and you can add one mid session.
 
 ## Nothing is deleted
 
-Throwing a file out moves it to `data/quarantine/` inside this folder. Nothing in
+Throwing a file out moves it to `~/.screenshot-triage/quarantine/`. Nothing in
 this app calls `rm`. When the pile is big enough, one button moves the whole
 quarantine to the macOS Trash, where it is still recoverable, and that is the only
-time anything leaves this folder.
+time anything leaves that folder.
+
+Quarantine lives outside this app folder on purpose: this folder is a git
+checkout, and `git clean -xfd` walks straight past `.gitignore`. Set it wherever
+you like under **Folders and setup** — the picker has a **show hidden** toggle so
+dot folders are reachable — and the app will say so if you point it somewhere a
+repo command could reach. **Open in Finder** takes you straight there.
 
 Every action is undoable, including a batch of them. `Z` walks back through the
 history and moves files physically back where they came from. The one thing undo
@@ -87,5 +106,5 @@ static/index.html  the whole frontend, one file
 test_triage.py     the self-check
 run.sh             the same thing, with a shorter name
 docs/card.png      the picture at the top of this file
-data/              your state and your quarantine, git ignored
+data/              your state and cached grid thumbnails, git ignored
 ```

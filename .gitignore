@@ -1,8 +1,29 @@
-# Your queue, your paths, your quarantined files. None of it belongs in git.
+# Your queue, your paths, your quarantined files, and the thumbnail cache built
+# from your own images. None of it belongs in git.
 data/
 
+# Python
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# macOS
 .DS_Store
-.backup/
+._*
+.Spotlight-V100
+.Trashes
+
+# Editors and agent tooling
+.idea/
+.vscode/
 .letta/
+.claude/
+
+# Local scratch
+.backup/
+*.log

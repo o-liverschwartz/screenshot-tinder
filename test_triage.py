@@ -36,8 +36,8 @@ def call(base, path, payload=None):
 
 def main():
     tmp = tempfile.mkdtemp(prefix="triage-test-")
-    app, src, dest, locked, trash_stub = (
-        os.path.join(tmp, n) for n in ("app", "src", "dest", "locked", "trash-stub"))
+    app, src, dest, locked, trash_stub, quar = (
+        os.path.join(tmp, n) for n in ("app", "src", "dest", "locked", "trash-stub", "quar"))
     os.makedirs(os.path.join(app, "static"), exist_ok=True)
     os.makedirs(src); os.makedirs(dest); os.makedirs(locked)
     shutil.copy(os.path.join(HERE, "server.py"), app)
@@ -68,7 +68,8 @@ def main():
                                                  {"path": locked, "recursive": False}],
                                      "types": ["images"],
                                      "destinations": [{"path": dest, "label": "dest"}],
-                                     "armed": dest})
+                                     "armed": dest,
+                                     "quarantine": quar})
         ids = [i["id"] for i in r["queue"]]
         assert len(ids) == 5, r
         ok("scan finds the files")
@@ -78,6 +79,17 @@ def main():
         ok("a denied folder is reported as denied, not as empty")
         assert r["config"]["armed"] == dest
         ok("the aimed destination survives a scan")
+
+        # Quarantine is configurable and lands nowhere near the app folder.
+        assert r["quarantine"] == quar, r["quarantine"]
+        assert not r["quarantine"].startswith(app), "quarantine must not live inside the app folder"
+        ok("quarantine is configurable and reported back")
+
+        r2 = call(base, "/api/destinations", {"destinations": [{"path": dest, "label": "dest"}],
+                                              "armed": dest, "quarantine": "/nope/not/writable"})
+        assert "error" in r2, r2
+        assert call(base, "/api/state")["quarantine"] == quar, "a rejected path must not be saved"
+        ok("an unusable quarantine folder is refused, and the old one stays")
 
         r = call(base, "/api/action", {"id": ids[0], "action": "move", "dest": dest})
         assert r["item"]["status"] == "filed" and os.path.isfile(f"{dest}/a.png"), r
@@ -91,7 +103,7 @@ def main():
 
         r = call(base, "/api/action", {"id": ids[2], "action": "remove"})
         q = r["item"]["path"]
-        assert os.path.isfile(q) and "/quarantine/" in q, r
+        assert os.path.isfile(q) and os.path.dirname(q) == quar, r
         assert not os.path.exists(f"{src}/c.png")
         ok("remove quarantines the file instead of deleting it")
 
@@ -120,7 +132,113 @@ def main():
         assert sorted(os.listdir(src)) == sorted(names), sorted(os.listdir(src))
         ok("after undoing everything, not one file was lost")
 
+        # A quarantine folder sitting inside a scanned folder must never feed
+        # its own contents back into the queue.
+        inner = os.path.join(src, "quarantine-inside")
+        r = call(base, "/api/scan", {"folders": [{"path": src, "recursive": True}],
+                                     "types": ["images"],
+                                     "destinations": [{"path": dest, "label": "dest"}],
+                                     "armed": dest, "quarantine": inner})
+        before = r["queue_total"]
+        first = r["queue"][0]["id"]
+        call(base, "/api/action", {"id": first, "action": "remove"})
+        r = call(base, "/api/scan", {"folders": [{"path": src, "recursive": True}],
+                                     "types": ["images"],
+                                     "destinations": [{"path": dest, "label": "dest"}],
+                                     "armed": dest, "quarantine": inner})
+        assert r["queue_total"] == before - 1, (before, r["queue_total"])
+        ok("a quarantine folder inside a scanned folder is never re-scanned")
+        call(base, "/api/undo", {})
+        call(base, "/api/scan", {"folders": [{"path": src, "recursive": False}],
+                                 "types": ["images"],
+                                 "destinations": [{"path": dest, "label": "dest"}],
+                                 "armed": dest, "quarantine": quar})
+
+        # --- what starring does is configurable ---
+        r = call(base, "/api/destinations", {"destinations": [], "armed": None,
+                                             "star": {"mode": "rename", "affix": "suffix",
+                                                      "text": "-KEEP", "color": 2}})
+        assert r["config"]["star"]["mode"] == "rename", r["config"]["star"]
+        ok("the star setting is saved")
+
+        pending = call(base, "/api/state")["queue"][0]
+        before = pending["name"]
+        r = call(base, "/api/action", {"id": pending["id"], "action": "star"})
+        stem, ext = os.path.splitext(before)
+        assert r["item"]["name"] == stem + "-KEEP" + ext, r["item"]["name"]
+        assert r["item"]["starred"] and r["item"]["status"] == "kept", r["item"]
+        assert os.path.isfile(r["item"]["path"]), "the renamed file must exist on disk"
+        assert not os.path.exists(os.path.join(src, before)), "the old name should be gone"
+        ok("starring in rename mode marks the name, before the extension")
+
+        r = call(base, "/api/undo", {})
+        assert r["undone"] == 1, r
+        assert os.path.isfile(os.path.join(src, before)), "undo must put the old name back"
+        ok("undo walks a starred rename back")
+
+        for bad, why in [({"mode": "rename", "text": "  ", "affix": "prefix", "color": 2}, "empty mark"),
+                         ({"mode": "label", "text": "x", "affix": "prefix", "color": 99}, "bad colour"),
+                         ({"mode": "wat", "text": "x", "affix": "prefix", "color": 2}, "bad mode")]:
+            r = call(base, "/api/destinations", {"destinations": [], "armed": None, "star": bad})
+            assert "error" in r, (why, r)
+        assert call(base, "/api/state")["config"]["star"]["text"] == "-KEEP", "a refused setting must not be saved"
+        ok("a nonsense star setting is refused and the old one stays")
+
+        # A mark that would build a path instead of a name is stripped, not obeyed.
+        r = call(base, "/api/destinations", {"destinations": [], "armed": None,
+                                             "star": {"mode": "rename", "affix": "prefix",
+                                                      "text": "../../x/", "color": 2}})
+        assert "/" not in r["config"]["star"]["text"], r["config"]["star"]
+        ok("a star mark cannot contain a path separator")
+
+        call(base, "/api/destinations", {"destinations": [{"path": dest, "label": "dest"}],
+                                         "armed": dest,
+                                         "star": {"mode": "label", "affix": "prefix",
+                                                  "text": "\u2605 ", "color": 2}})
+
+        # --- changing the folder list actually changes the queue ---
+        other = os.path.join(tmp, "other")
+        os.makedirs(other, exist_ok=True)
+        with open(os.path.join(other, "z.png"), "wb") as f:
+            f.write(PNG)
+        r = call(base, "/api/scan", {"folders": [{"path": other, "recursive": False}],
+                                     "types": ["images"],
+                                     "destinations": [{"path": dest, "label": "dest"}],
+                                     "armed": dest, "quarantine": quar})
+        names_now = sorted(i["name"] for i in r["queue"])
+        assert names_now == ["z.png"], names_now
+        ok("dropping a folder takes its files out of the queue")
+
+        # A folder the OS refuses is not evidence its files are gone.
+        r = call(base, "/api/scan", {"folders": [{"path": src, "recursive": False}],
+                                     "types": ["images"],
+                                     "destinations": [{"path": dest, "label": "dest"}],
+                                     "armed": dest, "quarantine": quar})
+        assert len(r["queue"]) == 5, r["queue_total"]
+        os.chmod(src, 0o000)
+        r = call(base, "/api/scan", {"folders": [{"path": src, "recursive": False}],
+                                     "types": ["images"],
+                                     "destinations": [{"path": dest, "label": "dest"}],
+                                     "armed": dest, "quarantine": quar})
+        os.chmod(src, 0o755)
+        assert r["problems"], r
+        assert r["queue_total"] == 5, "a denied folder must not empty the queue"
+        ok("a folder the OS denies keeps its files queued instead of dropping them")
+
+        # --- a quarantined file that vanished stops being counted, without a scan ---
+        r = call(base, "/api/action", {"id": r["queue"][0]["id"], "action": "remove"})
+        gone = r["item"]["path"]
+        os.remove(gone)
+        r = call(base, "/api/scan", {"folders": [{"path": src, "recursive": False}],
+                                     "types": ["images"],
+                                     "destinations": [{"path": dest, "label": "dest"}],
+                                     "armed": dest, "quarantine": quar})
+        assert r["counts"].get("removed", 0) == 0, r["counts"]
+        ok("a quarantined file deleted behind the app stops being counted")
+
         # --- quarantine -> Trash (osascript stubbed via TRIAGE_TRASH_DIR) ---
+        r = call(base, "/api/state")
+        ids = [i["id"] for i in r["queue"]]
         r = call(base, "/api/action", {"id": ids[1], "action": "remove"})
         qpath = r["item"]["path"]
         assert os.path.isfile(qpath), r
@@ -131,7 +249,7 @@ def main():
         assert r["counts"]["removed"] == 0, r
         assert not os.path.exists(qpath), "the quarantined file should have left the app's folder"
         stubbed = os.listdir(trash_stub)
-        assert len(stubbed) == 1 and stubbed[0].endswith("b.png"), stubbed
+        assert len(stubbed) == 1 and stubbed[0] == os.path.basename(qpath), (stubbed, qpath)
         ok("clearing quarantine moves the file to the stub trash dir and zeroes the count")
 
         assert call(base, "/api/state")["history_depth"] == depth, "clearing quarantine must not touch the undo stack"
@@ -140,10 +258,11 @@ def main():
         assert call(base, "/api/state")["history_depth"] == depth, "a refused undo must not pop the stack"
         ok("undoing a trashed remove refuses with a clear message instead of silently doing nothing")
 
-        call(base, "/api/action", {"id": ids[0], "action": "keep"})
+        keeper = call(base, "/api/state")["queue"][0]
+        call(base, "/api/action", {"id": keeper["id"], "action": "keep"})
         with urllib.request.urlopen(base + "/api/export", timeout=10) as resp:
             csv = resp.read().decode()
-        assert csv.startswith('"status"') and "a.png" in csv
+        assert csv.startswith('"status"') and keeper["name"] in csv, csv
         ok("the kept list exports as csv")
 
         print("\nall checks passed")

@@ -451,9 +451,56 @@
   .browse.open { display: flex; }
   #browse-list { overflow-y: auto; min-height: 0; }
   .browse .at { font-family: var(--mono); font-size: var(--t-mono); color: var(--muted); margin-bottom: 10px; overflow-wrap: anywhere; }
-  .browse .d { padding: 8px 10px; border-radius: var(--r-key); cursor: pointer; transition: background .15s, color .15s; }
-  .browse .d:hover { background: var(--surface); color: var(--spark-ink); }
-  .browse .acts2 { display: flex; gap: 8px; margin-top: 12px; }
+  /* A browse row is now name + how much is in it + a direct add. Navigating and
+     choosing are two different intents and no longer share one click. */
+  .browse .d { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 10px;
+               border-radius: var(--r-key); transition: background .15s, color .15s; }
+  .browse .d:hover { background: var(--surface); }
+  .browse .dn { flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .browse .d:hover .dn { color: var(--spark-ink); }
+  .browse .dc { font-family: var(--mono); font-size: var(--t-key); color: var(--muted); flex: none; }
+  .browse .dc.has { color: var(--spark-ink); background: var(--spark-soft);
+                    padding: 3px 8px; border-radius: var(--r-pill); }
+  .browse .dadd { flex: none; border: 1px solid var(--line); background: var(--surface);
+                  color: var(--muted); border-radius: var(--r-key); padding: 4px 10px;
+                  font-size: var(--t-key); font-family: var(--mono); opacity: 0; cursor: pointer;
+                  transition: opacity .15s, color .15s, border-color .15s; }
+  .browse .d:hover .dadd, .browse .dadd:focus-visible { opacity: 1; }
+  .browse .dadd:hover { color: var(--spark-ink); border-color: var(--spark); }
+  .browse .acts2 { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+  .browse .acts2 .here { flex: 1; font-size: var(--t-sm); color: var(--muted); }
+  .browse .acts2 .hid { display: flex; gap: 6px; align-items: center; font-size: var(--t-sm);
+                        color: var(--muted); white-space: nowrap; cursor: pointer; }
+  .chip .cn { font-family: var(--mono); font-size: var(--t-key); color: var(--muted); margin-left: 6px; }
+
+  /* ============ what starring does ============ */
+  .modes { display: flex; gap: 8px; margin-bottom: 4px; }
+  .mode { flex: 1; text-align: left; padding: 12px 14px; border-radius: var(--r-sm);
+          border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+          transition: border-color .15s, color .15s, background .15s; }
+  .mode b { display: block; color: var(--ink); font-size: var(--t-md); font-weight: 600; margin-bottom: 2px; }
+  .mode small { font-size: var(--t-sm); line-height: 1.45; display: block; }
+  .mode:hover { border-color: var(--spark); }
+  .mode.on { border-color: var(--spark); background: var(--surface); box-shadow: inset 0 0 0 1px var(--spark); }
+  .mode.on b { color: var(--spark-ink); }
+  .starbody { margin-top: 14px; }
+  .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+  /* The dot is the label colour itself. A row of names would say less. */
+  .sw { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; padding: 0;
+        position: relative; transition: transform .15s var(--pop), box-shadow .15s; }
+  .sw:hover { transform: scale(1.08); }
+  .sw.on { border-color: var(--ink); box-shadow: 0 0 0 3px var(--surface) inset; }
+  .affix { display: flex; gap: 8px; margin-bottom: 10px; }
+  .affix button { flex: none; padding: 7px 14px; border-radius: var(--r-pill); font-size: var(--t-sm);
+                  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); }
+  .affix button.on { border-color: var(--spark); color: var(--spark-ink); background: var(--surface); }
+  /* Says what the next star will literally do to a real filename. */
+  .preview { margin-top: 14px; padding: 11px 13px; border-radius: var(--r-sm);
+             background: var(--surface-2); border: 1px solid var(--line);
+             font-family: var(--mono); font-size: var(--t-mono); color: var(--ink);
+             overflow-wrap: anywhere; line-height: 1.6; }
+  .preview i { font-style: normal; color: var(--muted); }
+  .preview b { color: var(--spark-ink); font-weight: 600; }
   .warn { color: var(--warn); font-size: var(--t-sm); padding: 10px 12px; line-height: 1.55;
           background: var(--warn-soft); border-radius: var(--r-sm); }
 
@@ -469,13 +516,25 @@
   .sechead { margin: 0 0 16px; }
   .sechead h2 { font-family: var(--display); font-size: var(--t-xl); font-weight: 600; margin: 0 0 4px; letter-spacing: -.01em; }
   .sechead .sub { font-size: var(--t-md); color: var(--muted); margin: 0; line-height: 1.55; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 10px; }
+  /* position:relative so the drag band is a child of the grid itself. Its
+     coordinates are then grid-relative, which means the band scrolls with the
+     tiles for free -- no scroll offset maths anywhere in the drag code. */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 10px;
+          position: relative; }
   .tile { position: relative; aspect-ratio: 1; border-radius: var(--r-sm); overflow: hidden; cursor: pointer;
           border: 2px solid transparent; background: var(--surface);
           box-shadow: 0 1px 2px rgba(32,38,52,.10);
           transition: border-color .15s, transform .15s var(--ease-in-out), box-shadow .15s; }
   .tile:hover { transform: translateY(-2px); box-shadow: 0 8px 18px -10px rgba(32,38,52,.45); }
-  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* Mid-drag the hover lift is noise -- tiles jumping under a moving cursor makes
+     it hard to see what the band has actually caught. */
+  .grid.banding { user-select: none; cursor: crosshair; }
+  .grid.banding .tile:hover { transform: none; box-shadow: 0 1px 2px rgba(32,38,52,.10); }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block;
+              -webkit-user-drag: none; user-drag: none; }
+  /* The band sits above the tiles and never eats a pointer event of its own. */
+  .band { position: absolute; z-index: 5; pointer-events: none; border-radius: 4px;
+          border: 1.5px solid var(--spark); background: var(--spark-soft); }
   .tile.on { border-color: var(--spark); }
   .tile.on::after { content: ""; position: absolute; inset: 0; background: var(--spark); opacity: .18; }
   /* Every screenshot is named "Screenshot 2026-0..." so truncating from the left
@@ -554,6 +613,7 @@
       <button class="vault-btn" id="vault-btn" aria-describedby="vault-hint">nothing is deleted<br><b id="vault">quarantine empty</b></button>
       <div class="vault-hint" id="vault-hint" role="tooltip">
         <div id="vault-info">Thrown-out files move to a quarantine folder inside this app. Nothing is deleted, and nothing leaves that folder unless you send it to the Trash yourself. <b style="color:var(--ink)">Z</b> brings the last one back.<code id="vault-path"></code>
+          <button class="vault-trash-btn" id="vault-open-btn">Open the folder in Finder</button>
           <button class="vault-trash-btn" id="vault-trash-btn" disabled>Move all <span id="vault-trash-n">0</span> to Trash</button>
         </div>
         <div id="vault-confirm" class="hidden">
@@ -589,7 +649,9 @@
         <div class="at" id="browse-at"></div>
         <div id="browse-list"></div>
         <div class="acts2">
-          <button class="ghost" id="b-pick">Use this folder</button>
+          <label class="hid"><input type="checkbox" id="b-hidden"> show hidden</label>
+          <span class="here" id="browse-here"></span>
+          <button class="ghost" id="b-pick">Add this folder</button>
           <button class="ghost" id="b-close">Close</button>
         </div>
       </div>
@@ -608,6 +670,48 @@
         <button class="ghost" id="b-dest">Browse</button>
         <button class="ghost" id="a-dest">Add</button>
       </div>
+    </div>
+
+    <div class="card-p">
+      <h2>Where thrown-out files wait</h2>
+      <p class="sub">Quarantine. Nothing is deleted, so everything you throw out sits here until you send it to the Trash yourself. Keep it somewhere you will not wipe by accident.</p>
+      <div class="addrow">
+        <input type="text" id="quar" placeholder="quarantine folder path">
+        <button class="ghost" id="b-quar">Browse</button>
+        <button class="ghost" id="quar-open">Open in Finder</button>
+        <button class="ghost" id="quar-save">Save</button>
+      </div>
+      <p class="sub" id="quar-note" style="margin-top:10px;"></p>
+    </div>
+
+    <div class="card-p">
+      <h2>What starring does</h2>
+      <p class="sub">Star is <b>W</b> or the up-swipe. It always keeps the file. Pick what else it should do.</p>
+      <div class="modes">
+        <button class="mode" id="m-label" data-mode="label">
+          <b>Colour it in Finder</b><small>A Finder label. Invisible outside Finder, but it changes nothing about the file.</small>
+        </button>
+        <button class="mode" id="m-rename" data-mode="rename">
+          <b>Mark the name</b><small>Adds text to the filename, so the mark travels anywhere the file goes.</small>
+        </button>
+      </div>
+
+      <div class="starbody" id="star-label">
+        <div class="swatches" id="swatches"></div>
+      </div>
+
+      <div class="starbody hidden" id="star-rename">
+        <div class="affix">
+          <button id="af-prefix" data-affix="prefix">At the front</button>
+          <button id="af-suffix" data-affix="suffix">At the back</button>
+        </div>
+        <div class="addrow" style="margin-top:0;">
+          <input type="text" id="star-text" placeholder="what to add, e.g. ★ or -KEEP" maxlength="40">
+        </div>
+      </div>
+
+      <div class="preview" id="star-preview"></div>
+      <div class="addrow"><button class="ghost" id="star-save">Save</button></div>
     </div>
 
     <button class="go" id="start">Start reviewing</button>
@@ -630,7 +734,7 @@
       <button class="pri" id="bulk-file">File</button>
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:16px;">
-      <button class="mini" id="grid-back">Back to cards</button>
+      <button class="mini" id="grid-back">Back to cards, G</button>
     </div>
   </section>
 </main>
@@ -714,7 +818,7 @@
 
     <div class="kbd-group">
       <h3>Select &amp; undo</h3>
-      <div class="kbd-row"><span class="kbd-keys"><span class="kbd-key">G</span></span><span class="kbd-label">Select many</span></div>
+      <div class="kbd-row"><span class="kbd-keys"><span class="kbd-key">G</span></span><span class="kbd-label">Select many<small>Press G again to come back</small></span></div>
       <div class="kbd-row"><span class="kbd-keys"><span class="kbd-key">Z</span></span><span class="kbd-label">Undo</span></div>
     </div>
 
@@ -731,6 +835,9 @@ let folders = [], destinations = [], armed = null;
 let queue = [], counts = {}, problems = [], queueTotal = 0, historyDepth = 0;
 let current = null, renaming = false, browseAt = null, browseFor = 'src';
 let mode = 'setup', selected = new Set(), pickerFor = 'aim', quarantinePath = '';
+let appDir = '', defaultQuarantine = '';
+let star = { mode: 'label', color: 2, affix: 'prefix', text: '\u2605 ' };
+let starColors = [], finderLabels = true;
 // Identity of what the stage last actually painted (current card + the one peeking
 // behind it). A swipe settles through two independent paths -- the CSS
 // transitionend/420ms-safety-net callback, and the ~260ms-after-fetch refresh() --
@@ -762,18 +869,48 @@ function show(m) {
 }
 
 /* ---------------- setup ---------------- */
+// Which file types the counts should count. Ticking CSVs on has to change what
+// "412 here" means, or the number is a lie the moment you change the filter.
+const typeParam = () => {
+  const t = [];
+  if ($('t-img').checked) t.push('images');
+  if ($('t-csv').checked) t.push('csvs');
+  return (t.length ? t : ['images']).join(',');
+};
+const tally = (c, capped) => c === null ? 'unreadable' : c === 0 ? '' : (capped ? c + '+' : c);
+
 async function loadChips() {
-  const d = await (await fetch('/api/suggestions')).json();
+  const d = await (await fetch('/api/suggestions?types=' + typeParam())).json();
+  if (d.quarantine) { quarantinePath = d.quarantine; $('quar').value = quarantinePath;
+    $('vault-path').textContent = tilde(quarantinePath);
+    appDir = d.app_dir; defaultQuarantine = d.default_quarantine; drawQuarNote(); }
+  if (d.star_colors) { starColors = d.star_colors; finderLabels = d.finder_labels; drawSwatches(); }
   const box = $('chips'); box.innerHTML = '';
-  d.suggestions.forEach(s => {
+  d.suggestions.forEach(sg => {
     const b = document.createElement('button');
-    b.className = 'chip'; b.textContent = '+ ' + s.label; b.title = s.path;
+    const c = tally(sg.count, sg.capped);
+    b.className = 'chip';
+    b.innerHTML = '+ ' + esc(sg.label) + (c ? `<span class="cn">${c}</span>` : '');
+    b.title = sg.path + (sg.count ? ` — ${sg.count} file(s) to review` : ' — nothing to review here');
     b.onclick = () => {
-      if (folders.some(f => f.path === s.path)) return toast('Already on the list');
-      folders.push({ path: s.path, recursive: false }); drawSrcs();
+      if (folders.some(f => f.path === sg.path)) return toast('Already on the list');
+      folders.push({ path: sg.path, recursive: false }); drawSrcs();
     };
     box.appendChild(b);
   });
+}
+// Re-count when the type filter changes, otherwise the chips keep showing image
+// counts after you have switched to CSVs.
+$('t-img').onchange = $('t-csv').onchange = () => { loadChips(); if (browseAt) browse(browseAt); };
+
+// The one thing worth warning about: quarantine sitting inside the app folder,
+// which is a git checkout, where `git clean -xfd` walks past .gitignore and takes
+// the files this app promised never to delete.
+function drawQuarNote() {
+  const inApp = appDir && quarantinePath && (quarantinePath + '/').startsWith(appDir + '/');
+  $('quar-note').innerHTML = inApp
+    ? '<b style="color:var(--warn)">This sits inside the app folder.</b> Deleting or cleaning that folder would take your quarantined files with it. Somewhere under your home folder is safer &mdash; <code>' + esc(tilde(defaultQuarantine || '')) + '</code>.'
+    : 'Now at <code>' + esc(tilde(quarantinePath || '')) + '</code>. Files are moved here, never copied, and never deleted.';
 }
 function drawSrcs() {
   const l = $('srcs'); l.innerHTML = folders.length ? '' :
@@ -809,26 +946,160 @@ function addDest(p) {
 const saveDests = () => fetch('/api/destinations', { method:'POST',
   headers:{'Content-Type':'application/json'}, body: JSON.stringify({ destinations, armed }) });
 
-$('a-src').onclick = () => { const p=$('new-src').value.trim(); if(!p) return;
-  folders.push({path:p, recursive:$('recursive').checked}); $('new-src').value=''; $('recursive').checked=false; drawSrcs(); };
+$('a-src').onclick = () => { if (addSrc($('new-src').value)) { $('new-src').value=''; $('recursive').checked=false; } };
 $('a-dest').onclick = () => { if (addDest($('new-dest').value)) $('new-dest').value=''; };
+// Typing a path and hitting Enter is the obvious thing to do, and it did nothing.
+$('new-src').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('a-src').click(); } };
+$('new-dest').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('a-dest').click(); } };
+$('quar').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('quar-save').click(); } };
+
+function addSrc(path) {
+  path = (path || '').trim(); if (!path) return false;
+  if (folders.some(f => f.path === path)) { toast('Already on the list'); return false; }
+  folders.push({ path, recursive: $('recursive').checked }); drawSrcs(); return true;
+}
+
+$('quar-save').onclick = async () => {
+  const path = $('quar').value.trim();
+  if (!path) return toast('Give it a folder path');
+  const r = await fetch('/api/destinations', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ destinations, armed, quarantine: path }) });
+  const d = await r.json();
+  if (!r.ok) return toast(d.error || 'Could not use that folder');
+  apply(d); $('quar').value = quarantinePath; drawQuarNote();
+  toast('Thrown-out files now wait in ' + base(quarantinePath));
+};
+
+/* ---------------- what starring does ---------------- */
+function drawSwatches() {
+  const box = $('swatches'); box.innerHTML = '';
+  starColors.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'sw'; b.style.background = c.css;
+    b.title = c.name; b.setAttribute('aria-label', c.name);
+    b.dataset.color = c.index;
+    b.onclick = () => { star.color = c.index; drawStar(); };
+    box.appendChild(b);
+  });
+  drawStar();
+}
+
+function drawStar() {
+  $('m-label').classList.toggle('on', star.mode === 'label');
+  $('m-rename').classList.toggle('on', star.mode === 'rename');
+  $('star-label').classList.toggle('hidden', star.mode !== 'label');
+  $('star-rename').classList.toggle('hidden', star.mode !== 'rename');
+  $('af-prefix').classList.toggle('on', star.affix === 'prefix');
+  $('af-suffix').classList.toggle('on', star.affix === 'suffix');
+  if ($('star-text').value !== star.text) $('star-text').value = star.text;
+  for (const b of $('swatches').children) b.classList.toggle('on', +b.dataset.color === star.color);
+  drawStarPreview();
+}
+
+// Says what the next star will literally do, to a real filename off the queue
+// where there is one, so it is not a promise about an imaginary file.
+function drawStarPreview() {
+  const sample = (current && current.name) || (queue[0] && queue[0].name) || 'Screenshot 2026-09-02 at 11.04.png';
+  const p = $('star-preview');
+  if (star.mode === 'rename') {
+    const after = starredName(sample, star);
+    p.innerHTML = after === sample
+      ? `<i>Nothing to add yet. Type the mark above.</i>`
+      : `<i>keeps it, and renames</i><br>${esc(sample)}<br><i>to</i> <b>${esc(after)}</b>`;
+    return;
+  }
+  const c = starColors.find(x => x.index === star.color);
+  p.innerHTML = !finderLabels
+    ? `<i>Finder labels are macOS only, so on this machine starring would just keep the file.</i>`
+    : `<i>keeps</i> ${esc(sample)} <i>and paints it</i> <b>${esc(c ? c.name : '')}</b> <i>in Finder. The file itself is untouched.</i>`;
+}
+
+// Mirrors starred_name() on the server: at the back means before the extension,
+// or a mark after .png would change what the file is, not what it is called.
+function starredName(name, cfg) {
+  const text = (cfg.text || '').replace(/[/:\\]/g, '');
+  if (!text) return name;
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : '';
+  if (cfg.affix === 'suffix') return stem.endsWith(text) ? name : stem + text + ext;
+  return name.startsWith(text) ? name : text + stem + ext;
+}
+
+document.querySelectorAll('.mode').forEach(b =>
+  b.onclick = () => { star.mode = b.dataset.mode; drawStar(); });
+document.querySelectorAll('.affix button').forEach(b =>
+  b.onclick = () => { star.affix = b.dataset.affix; drawStar(); });
+$('star-text').oninput = e => { star.text = e.target.value; drawStarPreview(); };
+$('star-text').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('star-save').click(); } };
+
+$('star-save').onclick = async () => {
+  const r = await fetch('/api/destinations', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ destinations, armed, star }) });
+  const d = await r.json();
+  if (!r.ok) return toast(d.error || 'Could not save that');
+  apply(d);
+  toast(star.mode === 'rename' ? 'Star now marks the name' : 'Star now colours the file in Finder');
+};
 
 /* ---------------- browse ---------------- */
+// Browsing used to be blind: a list of folder names with no clue which one held
+// the pile, and picking one only filled a text box that you then had to Add.
+// Now every row says how many reviewable files are in it, and choosing one is a
+// single click that goes straight onto the list.
 async function browse(p) {
-  const d = await (await fetch('/api/browse?path='+encodeURIComponent(p||'~'))).json();
-  browseAt = d.path; $('browse-at').textContent = d.path;
+  const d = await (await fetch('/api/browse?path=' + encodeURIComponent(p||'~')
+                               + '&types=' + typeParam()
+                               + '&hidden=' + ($('b-hidden').checked ? '1' : '0'))).json();
+  browseAt = d.path; $('browse-at').textContent = tilde(d.path);
   const box = $('browse-list'); box.innerHTML = '';
   if (d.problem) box.innerHTML = `<div class="warn">This folder could not be read: ${esc(d.problem)}. That is a permission problem, not an empty folder.</div>`;
-  if (d.parent) { const u=document.createElement('div'); u.className='d'; u.textContent='↑ up one folder';
-    u.onclick=()=>browse(d.parent); box.appendChild(u); }
-  d.dirs.forEach(x => { const e=document.createElement('div'); e.className='d'; e.textContent=x.name;
-    e.onclick=()=>browse(x.path); box.appendChild(e); });
+  if (d.parent) { const u=document.createElement('div'); u.className='d';
+    u.innerHTML='<span class="dn">↑ up one folder</span>';
+    u.querySelector('.dn').onclick=()=>browse(d.parent); box.appendChild(u); }
+  d.dirs.forEach(x => {
+    const e = document.createElement('div'); e.className = 'd';
+    const c = tally(x.count, x.capped);
+    e.innerHTML = `<span class="dn">${esc(x.name)}</span>`
+      + (c ? `<span class="dc${x.count ? ' has' : ''}">${c}</span>` : '')
+      + `<button class="dadd">add</button>`;
+    e.querySelector('.dn').onclick = () => browse(x.path);
+    e.querySelector('.dadd').onclick = () => choose(x.path);
+    box.appendChild(e);
+  });
+  const here = tally(d.count, d.capped);
+  $('browse-here').textContent = browseFor === 'src'
+    ? (here ? `${here} to review right here` : 'nothing to review directly in this folder')
+    : '';
+  $('b-pick').textContent = browseFor === 'src' ? 'Add this folder' : 'Use this folder';
   $('browse').classList.add('open');
 }
-$('b-src').onclick = () => { browseFor='src'; browse($('new-src').value||'~'); };
-$('b-dest').onclick = () => { browseFor='dest'; browse($('new-dest').value||'~'); };
+// One place all three browse callers land, so "add" means the same thing whether
+// you clicked a row, the button, or hit the target folder itself.
+function choose(path) {
+  if (browseFor === 'src') { if (!addSrc(path)) return; toast('Added ' + base(path)); }
+  else if (browseFor === 'dest') { if (!addDest(path)) return; toast('Can now file into ' + base(path)); }
+  else { $('quar').value = path; $('quar-save').click(); }
+  $('browse').classList.remove('open');
+}
+// One browse panel, three callers. It used to live permanently inside the first
+// card, so opening it from the destinations or quarantine card put it a full
+// screen away from the button you just pressed. Move it under whichever row
+// asked for it instead of building two more of them.
+function openBrowse(what, btn, seed) {
+  browseFor = what;
+  btn.closest('.addrow').insertAdjacentElement('afterend', $('browse'));
+  // Opening onto a path with a dot folder in it while hidden folders are off
+  // would show a picker that cannot see where it already is.
+  if (seed && seed.replace(tilde('~'), '').split('/').some(seg => seg.startsWith('.')))
+    $('b-hidden').checked = true;
+  browse(seed || '~');
+}
+$('b-src').onclick  = e => openBrowse('src',  e.currentTarget, $('new-src').value);
+$('b-dest').onclick = e => openBrowse('dest', e.currentTarget, $('new-dest').value);
+$('b-quar').onclick = e => openBrowse('quar', e.currentTarget, $('quar').value || quarantinePath);
+$('b-hidden').onchange = () => browse(browseAt || '~');
 $('b-close').onclick = () => $('browse').classList.remove('open');
-$('b-pick').onclick = () => { $(browseFor==='src'?'new-src':'new-dest').value = browseAt; $('browse').classList.remove('open'); };
+$('b-pick').onclick = () => choose(browseAt);
 
 /* ---------------- scan ---------------- */
 $('start').onclick = async () => {
@@ -849,7 +1120,9 @@ function apply(d) {
   armed = d.config.armed || null;
   queue = d.queue; queueTotal = d.queue_total; counts = d.counts;
   historyDepth = d.history_depth; problems = d.problems || [];
-  if (d.quarantine) { quarantinePath = d.quarantine; $('vault-path').textContent = tilde(quarantinePath); }
+  if (d.quarantine) { quarantinePath = d.quarantine; $('vault-path').textContent = tilde(quarantinePath);
+    $('quar').value = quarantinePath; drawQuarNote(); }
+  if (d.config.star) { star = { ...star, ...d.config.star }; drawStar(); }
   $('t-img').checked = d.config.types.includes('images');
   $('t-csv').checked = d.config.types.includes('csvs');
   current = queue[0] || null;
@@ -921,6 +1194,19 @@ async function drawStage(fly) {
   }
   syncStamp();
   armDrag();
+  prefetch();
+}
+
+// The card view is a queue you already know the order of, so the next few images
+// can be in the browser's cache before they are asked for. With ETags now on the
+// image route these stay cached instead of being re-fetched on every redraw.
+const prefetched = new Set();
+function prefetch() {
+  for (const it of queue.slice(1, 5)) {
+    if (!it || it.category !== 'image' || prefetched.has(it.id)) continue;
+    prefetched.add(it.id);
+    new Image().src = `/api/image?id=${it.id}`;
+  }
 }
 /* Keeps .stampbox pinned to the exact rendered rect of the current img/noshot
    block, so the keep/pass/star stamp anchors to the visible photo's own
@@ -1120,7 +1406,17 @@ $('to-setup').onclick = () => { show('setup'); $('browse').classList.remove('ope
 $('vault-btn').onclick = () => $('vault-hint').classList.toggle('open');
 document.addEventListener('click', e => { if (!e.target.closest('.vault-wrap')) closeVaultTrash(); });
 
-/* ---------------- move quarantined files to Trash ---------------- */
+/* ---------------- quarantine: open it, empty it ---------------- */
+/* A hidden folder you cannot get to is a promise you cannot check. */
+const revealQuarantine = async () => {
+  const r = await fetch('/api/quarantine/reveal', { method: 'POST' });
+  const d = await r.json();
+  if (!r.ok) toast(d.error || 'Could not open it');
+};
+$('quar-open').onclick = revealQuarantine;
+$('vault-open-btn').onclick = revealQuarantine;
+
+
 $('vault-trash-btn').onclick = () => {
   const n = counts.removed || 0;
   $('vault-confirm-n').textContent = `${n} file${n === 1 ? '' : 's'}`;
@@ -1152,7 +1448,7 @@ const toggleShortcuts = () => $('shortcuts-scrim').classList.toggle('open');
 $('to-shortcuts').onclick = toggleShortcuts;
 $('shortcuts-x').onclick = closeShortcuts;
 $('shortcuts-scrim').onclick = e => { if (e.target === $('shortcuts-scrim')) closeShortcuts(); };
-$('to-grid').onclick = () => { selected.clear(); show('grid'); drawGrid(); };
+$('to-grid').onclick = () => { selected.clear(); lastClickedId = null; show('grid'); drawGrid(); };
 $('grid-back').onclick = () => { selected.clear(); show('review'); };
 $('export').onclick = () => (counts.kept||counts.filed) ? window.location='/api/export' : toast('Nothing kept yet');
 
@@ -1196,24 +1492,152 @@ $('sheet-new').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $
 /* ---------------- grid ---------------- */
 function drawGrid() {
   const g = $('grid'); g.innerHTML = '';
+  const how = 'Drag across them to select, shift-click for a run, or click one at a time.';
   $('grid-sub').textContent = queueTotal > queue.length
-    ? `Showing the oldest ${queue.length} of ${queueTotal}. Click to select.`
-    : 'Click to select. One decision covers all of them.';
+    ? `Showing the oldest ${queue.length} of ${queueTotal}. ${how}`
+    : how;
   queue.forEach(it => {
     const t = document.createElement('div');
     t.className = 'tile' + (selected.has(it.id) ? ' on' : '');
-    t.innerHTML = (it.category === 'image' ? `<img loading="lazy" src="/api/image?id=${it.id}" alt="">` : '')
+    t.dataset.id = it.id;
+    // A tile is ~150px. Pulling the full-resolution original for each of 200 of
+    // them is the whole reason the grid felt slow; /api/thumb serves a 480px
+    // cached copy and falls back to the original where it cannot make one.
+    t.innerHTML = (it.category === 'image' ? `<img loading="lazy" decoding="async" src="/api/thumb?id=${it.id}" alt="">` : '')
       + `<div class="nm">${esc(it.name)}</div>`;
-    t.onclick = () => { selected.has(it.id) ? selected.delete(it.id) : selected.add(it.id);
-      t.classList.toggle('on'); drawBulk(); };
     g.appendChild(t);
   });
+  drawBulk();
+}
+// One place that repaints which tiles look selected, so the drag, a click and a
+// shift-range all end up drawing the same way.
+function paintSelection() {
+  for (const t of $('grid').children) {
+    if (t.classList.contains('band')) continue;
+    t.classList.toggle('on', selected.has(t.dataset.id));
+  }
   drawBulk();
 }
 function drawBulk() {
   $('bulk').classList.toggle('hidden', !selected.size);
   $('bulk-n').textContent = `${selected.size} selected`;
 }
+
+/* ---------------- grid: drag a band across tiles ---------------- */
+/* Clicking 40 tiles one at a time was the whole cost of "select many". A drag
+   anywhere in the grid draws a band and takes everything it touches, and a drag
+   that starts on an already-selected tile removes instead, so the same gesture
+   corrects itself. A press that never moves is still just a click. */
+let lastClickedId = null;
+
+(function armBand() {
+  const g = $('grid');
+  const EDGE = 64, SPEED = 18, SLOP = 5;   // px from the viewport edge, px per frame, px before it counts as a drag
+  let anchor = null, baseline = null, geom = null, band = null, downTile = null;
+  let subtract = false, dragging = false, moved = false, pid = null;
+  let pointerY = 0, scroller = null, raf = 0, last = null;
+
+  // Grid-relative coordinates. gridRect.top moves as the page scrolls, so this
+  // one expression is also what makes scrolling mid-drag extend the band.
+  const local = (e) => {
+    const r = g.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const rect = (p) => ({
+    x: Math.min(anchor.x, p.x), y: Math.min(anchor.y, p.y),
+    w: Math.abs(p.x - anchor.x), h: Math.abs(p.y - anchor.y),
+  });
+
+  function apply(p) {
+    const r = rect(p);
+    band.style.cssText = `left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px`;
+    selected = new Set(baseline);
+    for (const t of geom) {
+      // Touching counts, the way a marquee should: overlap on both axes.
+      if (t.x < r.x + r.w && t.x + t.w > r.x && t.y < r.y + r.h && t.y + t.h > r.y) {
+        subtract ? selected.delete(t.id) : selected.add(t.id);
+      }
+    }
+    paintSelection();
+  }
+
+  // Holding the pointer at the top or bottom edge keeps scrolling, otherwise a
+  // drag could never reach past one screenful of a 200 tile grid.
+  function autoscroll() {
+    if (!dragging) return;
+    const box = scroller.getBoundingClientRect();
+    const over = pointerY - (box.bottom - EDGE), under = (box.top + EDGE) - pointerY;
+    const dy = over > 0 ? Math.min(over, EDGE) : under > 0 ? -Math.min(under, EDGE) : 0;
+    if (dy) {
+      scroller.scrollTop += (dy / EDGE) * SPEED;
+      if (last) apply(last);
+    }
+    raf = requestAnimationFrame(autoscroll);
+  }
+
+  g.addEventListener('pointerdown', e => {
+    if (e.button) return;
+    const tile = e.target.closest('.tile');
+    // Shift-click takes the whole run between the last tile you touched and this
+    // one -- the other half of "I want these forty".
+    if (tile && e.shiftKey && lastClickedId) {
+      e.preventDefault();
+      const ids = queue.map(i => i.id);
+      const a = ids.indexOf(lastClickedId), b = ids.indexOf(tile.dataset.id);
+      if (a > -1 && b > -1) {
+        for (const id of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) selected.add(id);
+        lastClickedId = tile.dataset.id;
+        paintSelection();
+        return;
+      }
+    }
+    e.preventDefault();
+    scroller = $('main');
+    anchor = local(e); last = null; baseline = new Set(selected);
+    // Held from pointerdown, not read again at pointerup: setPointerCapture
+    // retargets every later pointer event to the grid itself, so by the time the
+    // button comes up e.target is no longer the tile that was pressed.
+    downTile = tile;
+    // Starting on something already selected means you are taking it back out.
+    subtract = !!(tile && selected.has(tile.dataset.id));
+    geom = [...g.children].filter(t => t.dataset.id).map(t => ({
+      id: t.dataset.id, x: t.offsetLeft, y: t.offsetTop, w: t.offsetWidth, h: t.offsetHeight,
+    }));
+    dragging = true; moved = false; pid = e.pointerId;
+    try { g.setPointerCapture(pid); } catch (_) {}
+  });
+
+  g.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const p = local(e);
+    if (!moved && Math.abs(p.x - anchor.x) < SLOP && Math.abs(p.y - anchor.y) < SLOP) return;
+    if (!moved) {
+      moved = true;
+      g.classList.add('banding');
+      band = document.createElement('div'); band.className = 'band'; g.appendChild(band);
+      pointerY = e.clientY; raf = requestAnimationFrame(autoscroll);
+    }
+    pointerY = e.clientY; last = p;
+    apply(p);
+  });
+
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    cancelAnimationFrame(raf);
+    try { g.releasePointerCapture(pid); } catch (_) {}
+    g.classList.remove('banding');
+    if (band) { band.remove(); band = null; }
+    if (moved) return;                        // a real drag already set the selection
+    if (!downTile) return;                    // a click on the gaps clears nothing
+    const id = downTile.dataset.id;
+    selected.has(id) ? selected.delete(id) : selected.add(id);
+    lastClickedId = id;
+    paintSelection();
+  };
+  g.addEventListener('pointerup', end);
+  g.addEventListener('pointercancel', end);
+})();
 async function bulk(action, dest) {
   if (!selected.size) return;
   const d = await (await fetch('/api/bulk', { method:'POST', headers:{'Content-Type':'application/json'},
@@ -1250,7 +1674,8 @@ window.addEventListener('keydown', e => {
   if (e.key === '?') { e.preventDefault(); openShortcuts(); return; }
 
   if (mode === 'grid') {
-    if (e.key === 'Escape') { e.preventDefault(); $('grid-back').click(); }
+    // G is how you got here, so G is how you leave. Escape still works.
+    if (e.key === 'Escape' || e.key.toLowerCase() === 'g') { e.preventDefault(); $('grid-back').click(); }
     else if (e.key === ' ' && selected.size) { e.preventDefault(); $('bulk-file').click(); }
     else if (e.key.toLowerCase() === 'z') { e.preventDefault(); $('undo').click(); }
     return;

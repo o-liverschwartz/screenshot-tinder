@@ -26,10 +26,17 @@ from urllib.parse import urlparse, parse_qs, quote
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 DATA_DIR = os.path.join(BASE_DIR, "data")
-TRASH_DIR = os.path.join(DATA_DIR, "quarantine")
 STATE_FILE = os.path.join(DATA_DIR, "state.json")
+THUMB_DIR = os.path.join(DATA_DIR, "thumbs")
 
-os.makedirs(TRASH_DIR, exist_ok=True)
+# Quarantine used to live inside this app folder. That is the wrong place for
+# files we promise never to delete: the app folder is a git checkout, and
+# `git clean -xfd` walks straight past .gitignore. It now defaults to a folder
+# in your home directory that no repo command can reach, and it is configurable.
+LEGACY_QUARANTINE = os.path.join(DATA_DIR, "quarantine")
+DEFAULT_QUARANTINE = os.path.join(os.path.expanduser("~"), ".screenshot-triage", "quarantine")
+
+os.makedirs(DATA_DIR, exist_ok=True)
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".heic", ".heif"}
 CSV_EXTS = {".csv"}
@@ -56,6 +63,23 @@ DEFAULT_CONFIG = {
     "armed": None,
 }
 
+# What W actually does. It used to be hardcoded: mark it kept and paint it red in
+# Finder. A Finder label is invisible outside Finder, so the other half of the
+# choice is putting a mark in the filename itself, which travels anywhere.
+#
+# Measured on this machine, not remembered: `label index` N sets kMDItemFSLabel
+# 8-N, so index 1..7 walks orange, red, yellow, blue, purple, green, gray.
+STAR_COLORS = [
+    {"index": 1, "name": "Orange", "css": "#F0A030"},
+    {"index": 2, "name": "Red",    "css": "#E0554E"},
+    {"index": 3, "name": "Yellow", "css": "#EFC94C"},
+    {"index": 4, "name": "Blue",   "css": "#4C8DEF"},
+    {"index": 5, "name": "Purple", "css": "#A46FD8"},
+    {"index": 6, "name": "Green",  "css": "#5FBF6A"},
+    {"index": 7, "name": "Gray",   "css": "#9AA0A8"},
+]
+DEFAULT_STAR = {"mode": "label", "color": 2, "affix": "prefix", "text": "★ "}
+
 SUGGESTED_FOLDERS = [
     ("Desktop", "~/Desktop"),
     ("Screenshots", "~/Desktop/Screenshots"),
@@ -81,8 +105,51 @@ def migrate_state(state):
     config.setdefault("types", ["images"])
     config.setdefault("destinations", [])
     config.setdefault("armed", None)
+    # An existing install already has files sitting in the old in-app folder.
+    # Moving the default out from under them would orphan those files, so keep
+    # pointing at the old folder while it still holds anything.
+    if not config.get("quarantine"):
+        config["quarantine"] = legacy_or_default_quarantine()
+    star = config.setdefault("star", dict(DEFAULT_STAR))
+    for k, v in DEFAULT_STAR.items():
+        star.setdefault(k, v)
     state.setdefault("items", {})
     return state
+
+
+def legacy_or_default_quarantine():
+    try:
+        # Dotfiles do not count. A folder holding nothing but a .DS_Store is empty
+        # as far as anyone is concerned, and treating it as occupied would pin an
+        # existing install to the unsafe old location forever.
+        if os.path.isdir(LEGACY_QUARANTINE) and any(
+                not n.startswith(".") for n in os.listdir(LEGACY_QUARANTINE)):
+            return LEGACY_QUARANTINE
+    except OSError:
+        pass
+    return DEFAULT_QUARANTINE
+
+
+def quarantine_dir():
+    """Always resolved fresh from config, and always exists by the time it is used."""
+    path = os.path.abspath(os.path.expanduser(
+        STATE["config"].get("quarantine") or DEFAULT_QUARANTINE))
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def set_quarantine(raw):
+    """Validated at the boundary: we are about to move real files in here."""
+    path = os.path.abspath(os.path.expanduser((raw or "").strip()))
+    if not raw or not raw.strip() or path == "/":
+        return None, "pick a real folder"
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError as e:
+        return None, f"could not create that folder: {e.strerror or e}"
+    if not os.access(path, os.W_OK):
+        return None, "that folder is not writable"
+    return path, None
 
 
 def load_state():
@@ -105,10 +172,34 @@ def save_state(state):
 STATE = load_state()
 
 
+def reconcile_removed():
+    """A quarantined file emptied out by hand, or left behind by a change of
+    quarantine folder, is gone from quarantine whatever the stored count says.
+    "trashed" is already the word for left-quarantine-and-not-coming-back, so undo
+    goes on refusing it cleanly instead of the header claiming files that are not
+    there and the empty button failing on every one of them.
+
+    Called at startup and again on every scan. Quarantine only changes through this
+    app while it is running, so those are the two moments the count can be stale.
+    Caller holds STATE_LOCK, or is startup where nothing else is running yet."""
+    fixed = 0
+    for item in STATE["items"].values():
+        if item["status"] == "removed" and not os.path.exists(item["path"]):
+            item["status"] = "trashed"
+            fixed += 1
+    return fixed
+
+
+_stale = reconcile_removed()
+if _stale:
+    save_state(STATE)
+
+
 def excluded_prefixes():
     """Never scan our own app folder, and never re-scan a destination. Otherwise a
     file you just filed into ~/Desktop/Receipts reappears on the next scan."""
-    prefixes = [BASE_DIR]
+    prefixes = [BASE_DIR, os.path.abspath(os.path.expanduser(
+        STATE["config"].get("quarantine") or DEFAULT_QUARANTINE))]
     for dest in STATE["config"].get("destinations", []):
         prefixes.append(os.path.abspath(os.path.expanduser(dest["path"])))
     return prefixes
@@ -203,18 +294,32 @@ def run_scan(config):
         prefixes = excluded_prefixes()
         existing_paths = {item["path"]: iid for iid, item in STATE["items"].items()}
 
-        # Forget pending items whose file moved or vanished outside the app.
-        for iid, item in list(STATE["items"].items()):
-            if item["status"] == "pending" and not os.path.exists(item["path"]):
-                del STATE["items"][iid]
-                existing_paths.pop(item["path"], None)
-
         all_found, problems = [], []
         for folder in config["folders"]:
             paths, problem = scan_folder(folder["path"], folder.get("recursive", False), config["types"], prefixes)
             all_found.extend(paths)
             if problem:
                 problems.append({"path": folder["path"], "problem": problem})
+
+        # The queue is "what is waiting for review in the folders you asked me to
+        # look at". Take a folder off the list and its files have to leave the
+        # queue with it, or changing folders visibly does nothing. This also covers
+        # a pending file that was moved or deleted behind the app's back: it simply
+        # is not in what the scan found.
+        #
+        # A folder the OS refused is the one exception. An unreadable folder is not
+        # evidence its files are gone, so anything under it stays put -- the same
+        # reason scan_folder reports a denial rather than an empty result.
+        found_set = set(all_found)
+        denied = [os.path.abspath(os.path.expanduser(p["path"])) for p in problems]
+        for iid, item in list(STATE["items"].items()):
+            if item["status"] != "pending" or item["path"] in found_set:
+                continue
+            if any(item["path"] == d or item["path"].startswith(d + os.sep) for d in denied):
+                continue
+            del STATE["items"][iid]
+            existing_paths.pop(item["path"], None)
+        reconcile_removed()
 
         added = 0
         for path in all_found:
@@ -286,6 +391,20 @@ def trash_files(paths):
         return [], failed + [{"path": p, "error": str(e)} for p in existing]
 
 
+def do_quarantine_reveal():
+    """A hidden folder you cannot get to is a promise you cannot check. One button
+    opens it in Finder. Only ever the quarantine folder -- this does not take a path
+    from the browser, so it cannot be pointed at anything else."""
+    if sys.platform != "darwin":
+        return {"error": "Only supported on macOS"}, 400
+    path = quarantine_dir()
+    try:
+        subprocess.run(["open", path], capture_output=True, timeout=10, check=True)
+    except Exception as e:
+        return {"error": f"could not open it: {e}"}, 400
+    return {"opened": path}, 200
+
+
 def do_quarantine_clear():
     """Empty the quarantine folder into the macOS Trash. Every quarantine record is
     dropped from state, and any pending undo that would restore one of those files
@@ -306,6 +425,71 @@ def do_quarantine_clear():
                 moved_count += 1
         save_state(STATE)
         return {"moved": moved_count, "failed": len(failed)}, 200
+
+
+def thumb_for(item_id, path):
+    """A grid of 200 tiles was pulling 200 full-resolution originals over the wire,
+    which is the whole reason the grid felt slow. sips ships with macOS, so a 480px
+    JPEG costs no dependency; it is cached on disk keyed by the file's own mtime and
+    size, so it is generated once. Returns None anywhere sips is unavailable or
+    unhappy, and the caller falls back to the original file."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    out = os.path.join(THUMB_DIR, f"{item_id}-{int(st.st_mtime)}-{st.st_size}.jpg")
+    if os.path.exists(out):
+        return out
+    tmp = f"{out}.{uuid.uuid4().hex}.tmp.jpg"
+    try:
+        os.makedirs(THUMB_DIR, exist_ok=True)
+        # Unique temp then atomic replace: two browser tabs can ask for the same
+        # tile at the same moment and must not write over each other mid-file.
+        subprocess.run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "70",
+                        "-Z", "480", path, "--out", tmp],
+                       capture_output=True, timeout=20, check=True)
+        os.replace(tmp, out)
+        return out
+    except Exception:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return None
+
+
+def clean_star(raw):
+    """Whatever the browser sends becomes part of a real filename, so it is cleaned
+    here rather than trusted. Returns (star_config, error)."""
+    star = dict(DEFAULT_STAR)
+    star.update({k: v for k, v in (raw or {}).items() if k in DEFAULT_STAR})
+    if star["mode"] not in ("label", "rename"):
+        return None, "pick either a Finder label or a name change"
+    if star["affix"] not in ("prefix", "suffix"):
+        return None, "the mark goes at the front or the back"
+    try:
+        star["color"] = int(star["color"])
+    except (TypeError, ValueError):
+        return None, "that is not a colour"
+    if star["color"] not in [c["index"] for c in STAR_COLORS]:
+        return None, "that is not a colour"
+    # Anything that would build a path instead of a name, or a name macOS refuses.
+    star["text"] = "".join(ch for ch in str(star["text"] or "") if ch not in '/:\\\0').strip()
+    if star["mode"] == "rename" and not star["text"]:
+        return None, "give it something to add to the name"
+    return star, None
+
+
+def starred_name(name, star):
+    """Front or back, and the back means before the extension -- a mark after .jpg
+    would change what the file is, not what it is called."""
+    text = star.get("text") or ""
+    if not text:
+        return name
+    stem, ext = os.path.splitext(name)
+    if star.get("affix") == "suffix":
+        return name if stem.endswith(text) else f"{stem}{text}{ext}"
+    return name if name.startswith(text) else f"{text}{stem}{ext}"
 
 
 def free_path(directory, name):
@@ -334,7 +518,7 @@ def apply_one(item_id, action, new_name=None, dest=None):
         item["status"] = "kept"
 
     elif action == "remove":
-        dest_path = os.path.join(TRASH_DIR, f"{item_id}__{item['name']}")
+        dest_path = os.path.join(quarantine_dir(), f"{item_id}__{item['name']}")
         try:
             shutil.move(item["path"], dest_path)
         except OSError as e:
@@ -378,10 +562,27 @@ def apply_one(item_id, action, new_name=None, dest=None):
         physical = "rename"
 
     elif action == "star":
+        star = STATE["config"].get("star") or DEFAULT_STAR
         item["starred"] = True
         item["status"] = "kept"
-        set_finder_label(item["path"], 2)
-        physical = "star"
+        if star.get("mode") == "rename":
+            new_name = starred_name(item["name"], star)
+            if new_name != item["name"]:
+                try:
+                    # free_path rather than refusing on a collision: starring is a
+                    # swipe, and a swipe that fails mid-run is worse than a name
+                    # that picked up a " 2".
+                    target = free_path(os.path.dirname(item["path"]), new_name)
+                    os.rename(item["path"], target)
+                except OSError as e:
+                    return None, str(e)
+                item["path"] = target
+                item["name"] = os.path.basename(target)
+                # Reuse the rename op so undo already knows how to walk this back.
+                physical = "rename"
+        else:
+            set_finder_label(item["path"], int(star.get("color", 2)))
+            physical = "star"
 
     else:
         return None, "unknown action"
@@ -469,7 +670,7 @@ def queue_snapshot(problems=None):
             "history_depth": len(STATE["history"]),
             "last_action": last,
             "problems": problems or [],
-            "quarantine": TRASH_DIR,
+            "quarantine": quarantine_dir(),
         }
 
 
@@ -490,7 +691,35 @@ def kept_report():
     return "\n".join(",".join('"' + str(c).replace('"', '""') + '"' for c in row) for row in rows)
 
 
-def browse_dirs(path):
+COUNT_CAP = 2000
+
+
+def count_matching(directory, wanted_types):
+    """How many reviewable files sit directly in this folder. Browsing blind -- a
+    list of names with no idea which one holds the 400 screenshots -- is the reason
+    picking a folder felt like guesswork. Capped so a huge folder cannot stall the
+    listing, and never recursive."""
+    n = 0
+    try:
+        with os.scandir(directory) as it:
+            for entry in it:
+                if n >= COUNT_CAP:
+                    return COUNT_CAP, True
+                if entry.name.startswith("."):
+                    continue
+                try:
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+                except OSError:
+                    continue
+                if wanted(category_for_ext(os.path.splitext(entry.name)[1]), wanted_types):
+                    n += 1
+    except OSError:
+        return None, False
+    return n, False
+
+
+def browse_dirs(path, wanted_types, show_hidden=False):
     path = os.path.abspath(os.path.expanduser(path or "~"))
     if not os.path.isdir(path):
         path = os.path.expanduser("~")
@@ -501,25 +730,35 @@ def browse_dirs(path):
         entries, problem = [], "permission denied by macOS"
     except OSError as e:
         entries, problem = [], f"could not read: {e.strerror or e}"
-    dirs = [
-        {"name": name, "path": os.path.join(path, name)}
-        for name in entries
-        if not name.startswith(".") and os.path.isdir(os.path.join(path, name))
-    ]
+    dirs = []
+    for name in entries:
+        # The default quarantine lives in a dot folder, so hiding every dot folder
+        # made the app's own default unreachable through the app's own picker.
+        if name.startswith(".") and not show_hidden:
+            continue
+        full = os.path.join(path, name)
+        if not os.path.isdir(full):
+            continue
+        count, capped = count_matching(full, wanted_types)
+        dirs.append({"name": name, "path": full, "count": count, "capped": capped})
+    here, here_capped = count_matching(path, wanted_types)
     return {
         "path": path,
         "parent": os.path.dirname(path) if path != "/" else None,
         "dirs": dirs,
+        "count": here,
+        "capped": here_capped,
         "problem": problem,
     }
 
 
-def suggestions():
+def suggestions(wanted_types):
     out = []
     for label, raw in SUGGESTED_FOLDERS:
         full = os.path.expanduser(raw)
         if os.path.isdir(full):
-            out.append({"label": label, "path": full})
+            count, capped = count_matching(full, wanted_types)
+            out.append({"label": label, "path": full, "count": count, "capped": capped})
     return out
 
 
@@ -552,20 +791,29 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/state":
             self._send_json(queue_snapshot())
         elif route == "/api/suggestions":
-            self._send_json({"suggestions": suggestions(), "home": os.path.expanduser("~")})
+            qs = parse_qs(parsed.query)
+            types = qs.get("types", ["images"])[0].split(",")
+            self._send_json({"suggestions": suggestions(types), "home": os.path.expanduser("~"),
+                             "quarantine": quarantine_dir(),
+                             "default_quarantine": DEFAULT_QUARANTINE,
+                             "app_dir": BASE_DIR,
+                             "star_colors": STAR_COLORS,
+                             "finder_labels": sys.platform == "darwin"})
         elif route == "/api/browse":
             qs = parse_qs(parsed.query)
-            self._send_json(browse_dirs(qs.get("path", [os.path.expanduser("~")])[0]))
-        elif route == "/api/image":
+            types = qs.get("types", ["images"])[0].split(",")
+            hidden = qs.get("hidden", ["0"])[0] == "1"
+            self._send_json(browse_dirs(qs.get("path", [os.path.expanduser("~")])[0], types, hidden))
+        elif route in ("/api/image", "/api/thumb"):
             qs = parse_qs(parsed.query)
-            self._serve_image(qs.get("id", [None])[0])
+            self._serve_image(qs.get("id", [None])[0], thumb=(route == "/api/thumb"))
         elif route == "/api/export":
             self._serve_export()
         else:
             self.send_response(404)
             self.end_headers()
 
-    def _serve_image(self, item_id):
+    def _serve_image(self, item_id, thumb=False):
         with STATE_LOCK:
             item = STATE["items"].get(item_id)
             path = item["path"] if item and item.get("category") == "image" else None
@@ -573,18 +821,38 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             return
+        served = (thumb and thumb_for(item_id, path)) or path
+
+        # The old header was no-store, so flipping back to a card you have already
+        # seen, or redrawing the grid, re-read and re-decoded the file every single
+        # time. The tag is the file's own mtime and size: rename or replace the file
+        # and it changes, so a stale picture is not possible.
         try:
-            with open(path, "rb") as f:
+            st = os.stat(served)
+        except OSError:
+            self.send_response(404)
+            self.end_headers()
+            return
+        etag = '"%x-%x"' % (int(st.st_mtime), st.st_size)
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "private, max-age=300")
+            self.end_headers()
+            return
+        try:
+            with open(served, "rb") as f:
                 body = f.read()
         except OSError:
             self.send_response(404)
             self.end_headers()
             return
-        ext = os.path.splitext(path)[1].lower()
+        ext = os.path.splitext(served)[1].lower()
         self.send_response(200)
         self.send_header("Content-Type", IMAGE_MIME.get(ext, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", "private, max-age=300")
         self.end_headers()
         self.wfile.write(body)
 
@@ -606,16 +874,40 @@ class Handler(BaseHTTPRequestHandler):
                 "types": body.get("types", ["images"]),
                 "destinations": body.get("destinations", []),
                 "armed": body.get("armed"),
+                "quarantine": STATE["config"].get("quarantine"),
+                "star": STATE["config"].get("star"),
             }
+            if body.get("quarantine"):
+                path, error = set_quarantine(body["quarantine"])
+                if error:
+                    self._send_json({"error": error}, 400)
+                    return
+                config["quarantine"] = path
             added, problems = run_scan(config)
             snap = queue_snapshot(problems)
             snap["added"] = added
             self._send_json(snap)
         elif route == "/api/destinations":
             body = self._read_json()
+            star = None
+            if body.get("star"):
+                star, error = clean_star(body["star"])
+                if error:
+                    self._send_json({"error": error}, 400)
+                    return
+            quarantine = None
+            if body.get("quarantine"):
+                quarantine, error = set_quarantine(body["quarantine"])
+                if error:
+                    self._send_json({"error": error}, 400)
+                    return
             with STATE_LOCK:
                 STATE["config"]["destinations"] = body.get("destinations", [])
                 STATE["config"]["armed"] = body.get("armed")
+                if quarantine:
+                    STATE["config"]["quarantine"] = quarantine
+                if star:
+                    STATE["config"]["star"] = star
                 save_state(STATE)
             self._send_json(queue_snapshot())
         elif route == "/api/action":
@@ -631,6 +923,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(result, status)
         elif route == "/api/undo":
             result, status = do_undo()
+            self._send_json(result, status)
+        elif route == "/api/quarantine/reveal":
+            result, status = do_quarantine_reveal()
             self._send_json(result, status)
         elif route == "/api/quarantine/clear":
             result, status = do_quarantine_clear()
@@ -675,7 +970,7 @@ def main():
 
     url = f"http://127.0.0.1:{port}/"
     print(f"Screenshot Triage  {url}")
-    print(f"Quarantine         {TRASH_DIR}")
+    print(f"Quarantine         {quarantine_dir()}")
     print("Nothing is deleted. Ctrl+C to stop.")
 
     if not args.no_browser:
