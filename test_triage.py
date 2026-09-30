@@ -52,7 +52,15 @@ def main():
     port = free_port()
     base = f"http://127.0.0.1:{port}"
     home = os.path.join(tmp, "home"); os.makedirs(home)
-    env = {**os.environ, "HOME": home, "TRIAGE_TRASH_DIR": trash_stub, "TRIAGE_CACHE_DIR": cache}
+    # A stand-in osascript answers the folder dialog, so no dialog opens during the
+    # checks. Every other osascript call passes through to the real one.
+    fake_bin = os.path.join(tmp, "bin"); os.makedirs(fake_bin)
+    with open(os.path.join(fake_bin, "osascript"), "w") as f:
+        f.write('#!/bin/sh\ncase "$*" in *"choose folder"*) echo "$PICK_ANSWER/"; exit 0;; esac\n'
+                'exec /usr/bin/osascript "$@"\n')
+    os.chmod(os.path.join(fake_bin, "osascript"), 0o755)
+    env = {**os.environ, "HOME": home, "TRIAGE_TRASH_DIR": trash_stub, "TRIAGE_CACHE_DIR": cache,
+           "PATH": fake_bin + os.pathsep + os.environ.get("PATH", ""), "PICK_ANSWER": dest}
     proc = subprocess.Popen([sys.executable, "server.py", "--port", str(port), "--no-browser"],
                             cwd=app, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -340,6 +348,10 @@ def main():
                 code = e.code
             assert code == 403, (hdrs, code)
         ok("a request that does not name this server is refused")
+
+        if sys.platform == "darwin":
+            assert call(base, "/api/pick-folder", {"start": src}) == {"path": dest}
+            ok("browse hands back the folder picked in the macOS dialog")
 
         # undo must never replace a file that took the old name
         put(f"{t2}/shot.png", b"ORIGINAL")

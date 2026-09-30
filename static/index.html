@@ -1145,8 +1145,13 @@ function choose(path) {
 // card, so opening it from the destinations or quarantine card put it a full
 // screen away from the button you just pressed. Move it under whichever row
 // asked for it instead of building two more of them.
-function openBrowse(what, btn, seed) {
+async function openBrowse(what, btn, seed) {
   browseFor = what;
+  // The normal macOS folder dialog first. The list below is the fallback.
+  const d = await (await fetch('/api/pick-folder', { method:'POST', headers:{'Content-Type':'application/json'},
+                                                     body: JSON.stringify({ start: seed || '' }) })).json();
+  if (d.path) return choose(d.path);
+  if (d.cancelled) return;
   btn.closest('.addrow').insertAdjacentElement('afterend', $('browse'));
   // Opening onto a path with a dot folder in it while hidden folders are off
   // would show a picker that cannot see where it already is.

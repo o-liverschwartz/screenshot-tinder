@@ -449,6 +449,30 @@ def trash_files(paths):
         return [], failed + [{"path": p, "error": str(e)} for p in existing]
 
 
+def pick_folder(start=""):
+    """Browse opens the normal macOS folder dialog. Anything else (not a Mac, no
+    osascript) says unavailable and the page falls back to its own folder list."""
+    if sys.platform != "darwin":
+        return {"unavailable": True}
+    script = 'activate\nPOSIX path of (choose folder with prompt "Pick a folder"'
+    start = os.path.expanduser(start or "")
+    if start and os.path.isdir(start):
+        escaped = start.replace("\\", "\\\\").replace('"', '\\"')
+        script += f' default location (POSIX file "{escaped}")'
+    script += ")"
+    try:
+        # No timeout worth having: the dialog waits on a person.
+        done = subprocess.run(["osascript", "-e", script], capture_output=True, timeout=3600)
+    except Exception as e:
+        return {"unavailable": True, "error": str(e)}
+    if done.returncode == 0:
+        path = done.stdout.decode().strip()
+        return {"path": path.rstrip("/") or path}
+    if b"-128" in done.stderr:          # Cancel
+        return {"cancelled": True}
+    return {"unavailable": True, "error": done.stderr.decode().strip()}
+
+
 def do_quarantine_reveal():
     """A hidden folder you cannot get to is a promise you cannot check. One button
     opens it in Finder. Only ever the quarantine folder -- this does not take a path
@@ -1163,6 +1187,8 @@ class Handler(BaseHTTPRequestHandler):
             freed = clear_thumbs()
             freed["stats"] = thumb_stats()
             self._send_json(freed)
+        elif route == "/api/pick-folder":
+            self._send_json(pick_folder(self._read_json().get("start")))
         elif route == "/api/quarantine/reveal":
             result, status = do_quarantine_reveal()
             self._send_json(result, status)
