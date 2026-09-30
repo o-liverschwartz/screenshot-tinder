@@ -1427,11 +1427,12 @@ async function act(action, extra) {
   const r = await fetch('/api/action', { method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ id: target.id, action, ...(extra||{}) }) });
   inflight--;
+  const d = await r.json();
   if (!r.ok) {
-    const d = await r.json();
     toast(`${target.name}: ${d.error || 'That did not work'}`);
     return refresh();
   }
+  if (d.warning) toast(d.warning);
   // Only the last request in a burst re-reads the truth, and tops the queue up.
   if (inflight === 0) setTimeout(() => { if (inflight === 0) refresh(); }, 260);
 }
@@ -1456,7 +1457,8 @@ function fileIt() {
 $('undo').onclick = async () => {
   const r = await fetch('/api/undo', { method:'POST' }); const d = await r.json();
   if (!r.ok) return toast(d.error || 'Nothing to undo');
-  toast(d.undone === 1 ? 'Put back' : `Put ${d.undone} back`);
+  if (d.errors && d.errors.length) toast(`Put ${d.undone} back. ${d.errors[0]}`);
+  else toast(d.undone === 1 ? 'Put back' : `Put ${d.undone} back`);
   await refresh();
 };
 document.querySelectorAll('.act').forEach(b =>
@@ -1719,6 +1721,8 @@ window.addEventListener('keydown', e => {
     else if (e.key === 'Escape') { e.preventDefault(); renaming = false; drawDock(); }
     return;
   }
+  // Cmd+A is select all, not throw out. A held key is one decision, not thirty.
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
   if (shortcutsOpen()) {
     if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); closeShortcuts(); }
     return; // every other key is inert while the overlay is up

@@ -12,6 +12,7 @@ Stdlib only, no dependencies, never talks to the network.
     python3 server.py --port 9000 --no-browser
 """
 import argparse
+import fcntl
 import json
 import os
 import shutil
@@ -22,7 +23,7 @@ import time
 import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs, quote
+from urllib.parse import urlparse, parse_qs
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -229,7 +230,7 @@ if _stale:
 if os.path.isdir(LEGACY_THUMB_DIR):
     try:
         shutil.rmtree(LEGACY_THUMB_DIR)
-        print(f"[cache] retired the old in-app thumbnail folder", file=sys.stderr)
+        print("[cache] retired the old in-app thumbnail folder", file=sys.stderr)
     except OSError:
         pass
 
@@ -242,6 +243,16 @@ def excluded_prefixes():
     for dest in STATE["config"].get("destinations", []):
         prefixes.append(os.path.abspath(os.path.expanduser(dest["path"])))
     return prefixes
+
+
+def clean_rows(rows):
+    """Folder and destination lists come from the browser and are indexed by
+    ["path"] on every scan. One row without a path would break every scan after."""
+    if not isinstance(rows, list):
+        return []
+    return [{"path": r["path"], **{k: r[k] for k in ("label", "recursive") if k in r}}
+            for r in rows
+            if isinstance(r, dict) and isinstance(r.get("path"), str) and r["path"].strip()]
 
 
 def is_excluded(path, prefixes):
@@ -298,8 +309,8 @@ def scan_folder(folder_path, recursive, wanted_types, prefixes):
             return [], f"could not read: {e.strerror or e}"
 
     if recursive:
-        problem = None
-        for root, dirs, files in os.walk(expanded, onerror=lambda e: None):
+        problem, blocked = None, []
+        for root, dirs, files in os.walk(expanded, onerror=blocked.append):
             if is_excluded(root, prefixes):
                 dirs[:] = []
                 continue
@@ -311,6 +322,10 @@ def scan_folder(folder_path, recursive, wanted_types, prefixes):
                     found.append(os.path.join(root, fname))
         if not found:
             _, problem = listdir(expanded)
+        if blocked and not problem:
+            # Not evidence the files under it are gone. run_scan keeps this folder's
+            # queued files when it sees a problem, the same as a denied top folder.
+            problem = f"could not read {blocked[0].filename}: {blocked[0].strerror}"
         return found, problem
 
     entries, problem = listdir(expanded)
@@ -393,8 +408,10 @@ def set_finder_label(path, label_index):
     try:
         escaped = path.replace("\\", "\\\\").replace('"', '\\"')
         script = f'tell application "Finder" to set label index of (POSIX file "{escaped}" as alias) to {label_index}'
-        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
-        return True
+        done = subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
+        if done.returncode:
+            print(f"[warn] Finder label failed for {path}: {done.stderr.decode().strip()}", file=sys.stderr)
+        return done.returncode == 0
     except Exception as e:
         print(f"[warn] Finder label failed for {path}: {e}", file=sys.stderr)
         return False
@@ -679,7 +696,7 @@ def apply_one(item_id, action, new_name=None, dest=None):
     if not item:
         return None, "not found"
     prev_snapshot = dict(item)
-    physical = None
+    physical = warn = None
 
     if action == "keep":
         item["status"] = "kept"
@@ -717,7 +734,8 @@ def apply_one(item_id, action, new_name=None, dest=None):
         if not new_name:
             return None, "new name required"
         new_path = os.path.join(os.path.dirname(item["path"]), new_name)
-        if os.path.exists(new_path):
+        # samefile: on a case-insensitive volume "a.png" -> "A.png" names itself.
+        if os.path.exists(new_path) and not os.path.samefile(new_path, item["path"]):
             return None, "a file with that name already exists"
         try:
             os.rename(item["path"], new_path)
@@ -748,13 +766,14 @@ def apply_one(item_id, action, new_name=None, dest=None):
                 # Reuse the rename op so undo already knows how to walk this back.
                 physical = "rename"
         else:
-            set_finder_label(item["path"], int(star.get("color", 2)))
+            if not set_finder_label(item["path"], int(star.get("color", 2))):
+                warn = "Kept, but the Finder label failed. Allow this terminal to control Finder in System Settings."
             physical = "star"
 
     else:
         return None, "unknown action"
 
-    return {"id": item_id, "physical": physical, "prev": prev_snapshot}, None
+    return {"id": item_id, "physical": physical, "prev": prev_snapshot, "warn": warn}, None
 
 
 def do_action(item_id, action, new_name=None, dest=None):
@@ -764,7 +783,10 @@ def do_action(item_id, action, new_name=None, dest=None):
             return {"error": error}, (404 if error == "not found" else 400)
         STATE["history"].append({"label": action, "ops": [op]})
         save_state(STATE)
-        return {"item": {"id": item_id, **STATE["items"][item_id]}}, 200
+        result = {"item": {"id": item_id, **STATE["items"][item_id]}}
+        if op.get("warn"):
+            result["warning"] = op["warn"]
+        return result, 200
 
 
 def do_bulk(item_ids, action, dest=None):
@@ -794,24 +816,33 @@ def do_undo():
             if op["physical"] == "remove" and item and item.get("status") == "trashed":
                 return {"error": "That file was moved to the Trash and can't be restored from here."}, 400
         STATE["history"].pop()
-        undone, errors = 0, []
+        undone, errors, retry = 0, [], []
         for op in reversed(entry["ops"]):
             item_id, prev = op["id"], op["prev"]
             item = STATE["items"].get(item_id)
             if not item:
                 continue
             try:
-                if op["physical"] in ("remove", "move"):
-                    shutil.move(item["path"], prev["path"])
-                elif op["physical"] == "rename":
-                    os.rename(item["path"], prev["path"])
+                if op["physical"] in ("remove", "move", "rename"):
+                    back = prev["path"]
+                    # Something new can take the old name while the file is away.
+                    # os.rename would replace it without a word, so step aside.
+                    if os.path.lexists(back) and not (
+                            os.path.exists(item["path"]) and os.path.samefile(item["path"], back)):
+                        back = free_path(os.path.dirname(back), os.path.basename(back))
+                        prev = {**prev, "path": back, "name": os.path.basename(back)}
+                    shutil.move(item["path"], back)
                 elif op["physical"] == "star" and not prev.get("starred"):
                     set_finder_label(prev["path"], 0)
             except OSError as e:
                 errors.append(str(e))
+                if os.path.exists(item["path"]):    # still here, so this can be retried
+                    retry.append(op)
                 continue
             STATE["items"][item_id] = prev
             undone += 1
+        if retry:
+            STATE["history"].append({"label": entry.get("label"), "ops": retry})
         save_state(STATE)
         return {"undone": undone, "label": entry.get("label"), "errors": errors}, 200
 
@@ -855,7 +886,9 @@ def kept_report():
                 item["name"],
                 item["path"],
             ))
-    return "\n".join(",".join('"' + str(c).replace('"', '""') + '"' for c in row) for row in rows)
+    # A name that starts with = + - @ is a formula to Excel and Numbers.
+    cell = lambda c: "'" + str(c) if str(c).startswith(("=", "+", "-", "@", "\t", "\r")) else str(c)
+    return "\n".join(",".join('"' + cell(c).replace('"', '""') + '"' for c in row) for row in rows)
 
 
 COUNT_CAP = 2000
@@ -942,15 +975,25 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _read_json(self):
-        length = int(self.headers.get("Content-Length", 0))
-        if length == 0:
-            return {}
         try:
-            return json.loads(self.rfile.read(length))
-        except json.JSONDecodeError:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length)) if length else {}
+        except ValueError:      # bad length, or JSONDecodeError, which is one
             return {}
+        return body if isinstance(body, dict) else {}
+
+    def _ours(self):
+        """Any page in any tab can send requests to 127.0.0.1, and a rebound DNS
+        name can read the answers. Only take requests that name this server."""
+        host = self.headers.get("Host") or ""
+        if host.rsplit(":", 1)[0] not in ("127.0.0.1", "localhost"):
+            return False
+        origin = self.headers.get("Origin")
+        return origin is None or origin == "http://" + host
 
     def do_GET(self):
+        if not self._ours():
+            return self._refuse()
         parsed = urlparse(self.path)
         route = parsed.path
         if route in ("/", "/index.html"):
@@ -1034,14 +1077,20 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _refuse(self):
+        self.send_response(403)
+        self.end_headers()
+
     def do_POST(self):
+        if not self._ours():
+            return self._refuse()
         route = urlparse(self.path).path
         if route == "/api/scan":
             body = self._read_json()
             config = {
-                "folders": body.get("folders", []),
-                "types": body.get("types", ["images"]),
-                "destinations": body.get("destinations", []),
+                "folders": clean_rows(body.get("folders")),
+                "types": [t for t in body.get("types", ["images"]) if t in ("images", "csvs")],
+                "destinations": clean_rows(body.get("destinations")),
                 "armed": body.get("armed"),
                 "quarantine": STATE["config"].get("quarantine"),
                 "star": STATE["config"].get("star"),
@@ -1080,7 +1129,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_json({"error": error}, 400)
                     return
             with STATE_LOCK:
-                STATE["config"]["destinations"] = body.get("destinations", [])
+                STATE["config"]["destinations"] = clean_rows(body.get("destinations"))
                 STATE["config"]["armed"] = body.get("armed")
                 if quarantine:
                     STATE["config"]["quarantine"] = quarantine
@@ -1142,6 +1191,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    # Two copies would each hold their own STATE and overwrite data/state.json, and
+    # the port fallback below would hide that. Ceiling: flock is POSIX, and this
+    # app already needs macOS for Finder and the Trash.
+    lock = open(os.path.join(DATA_DIR, "server.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        sys.exit("Already running. Two copies would overwrite each other's state.")
     parser = argparse.ArgumentParser(description="Local keyboard-driven file triage.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")

@@ -51,7 +51,8 @@ def main():
 
     port = free_port()
     base = f"http://127.0.0.1:{port}"
-    env = {**os.environ, "TRIAGE_TRASH_DIR": trash_stub, "TRIAGE_CACHE_DIR": cache}
+    home = os.path.join(tmp, "home"); os.makedirs(home)
+    env = {**os.environ, "HOME": home, "TRIAGE_TRASH_DIR": trash_stub, "TRIAGE_CACHE_DIR": cache}
     proc = subprocess.Popen([sys.executable, "server.py", "--port", str(port), "--no-browser"],
                             cwd=app, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -319,6 +320,69 @@ def main():
             csv = resp.read().decode()
         assert csv.startswith('"status"') and keeper["name"] in csv, csv
         ok("the kept list exports as csv")
+
+
+        # --- bugs found in review: each one reproduced before it was fixed ---
+        t2 = os.path.join(tmp, "t2"); os.makedirs(t2)
+        def scan2(rec=False):
+            return call(base, "/api/scan", {"folders": [{"path": t2, "recursive": rec}], "types": ["images"],
+                                            "destinations": [], "armed": None, "quarantine": quar})
+        def put(p, data=PNG):
+            with open(p, "wb") as f:
+                f.write(data)
+
+        # a page on another site can reach 127.0.0.1 too
+        for hdrs in ({"Host": "evil.example"}, {"Origin": "http://evil.example"}):
+            req = urllib.request.Request(base + "/api/state", headers=hdrs)
+            try:
+                urllib.request.urlopen(req, timeout=5); code = 200
+            except urllib.error.HTTPError as e:
+                code = e.code
+            assert code == 403, (hdrs, code)
+        ok("a request that does not name this server is refused")
+
+        # undo must never replace a file that took the old name
+        put(f"{t2}/shot.png", b"ORIGINAL")
+        iid = scan2()["queue"][0]["id"]
+        call(base, "/api/action", {"id": iid, "action": "move", "dest": dest})
+        put(f"{t2}/shot.png", b"NEWER")
+        call(base, "/api/undo", {})
+        assert open(f"{t2}/shot.png", "rb").read() == b"NEWER", "undo overwrote a newer file"
+        assert sorted(os.listdir(t2)) == ["shot 2.png", "shot.png"], os.listdir(t2)
+        ok("undo never overwrites a file that took the old name")
+        for n in os.listdir(t2): os.remove(f"{t2}/{n}")
+
+        # a case-only rename is a rename, not a collision
+        put(f"{t2}/case.png")
+        iid = scan2()["queue"][0]["id"]
+        r = call(base, "/api/action", {"id": iid, "action": "rename", "new_name": "CASE.png"})
+        assert "error" not in r and "CASE.png" in os.listdir(t2), (r, os.listdir(t2))
+        ok("renaming only the case of a name works")
+        for n in os.listdir(t2): os.remove(f"{t2}/{n}")
+
+        # an unreadable subfolder is not evidence its files are gone
+        os.makedirs(f"{t2}/sub"); put(f"{t2}/top.png"); put(f"{t2}/sub/deep.png")
+        assert scan2(rec=True)["queue_total"] == 2
+        os.chmod(f"{t2}/sub", 0o000)
+        r = scan2(rec=True)
+        os.chmod(f"{t2}/sub", 0o755)
+        assert r["problems"] and r["queue_total"] == 2, (r["problems"], r["queue_total"])
+        ok("a denied subfolder keeps its files queued and is reported")
+        shutil.rmtree(t2); os.makedirs(t2)
+
+        # one malformed row must not break scanning
+        r = call(base, "/api/destinations", {"destinations": [{"label": "no path"}, {"path": dest}], "armed": None})
+        assert [d["path"] for d in r["config"]["destinations"]] == [dest], r["config"]["destinations"]
+        assert "queue" in call(base, "/api/scan", {"folders": [{}, {"path": t2}], "types": ["images"]})
+        ok("rows without a path are dropped instead of breaking every scan")
+
+        # the export must not hand a spreadsheet a formula
+        put(f"{t2}/=1+1.png")
+        iid = scan2()["queue"][0]["id"]
+        call(base, "/api/action", {"id": iid, "action": "keep"})
+        with urllib.request.urlopen(base + "/api/export", timeout=10) as resp:
+            assert '"\'=1+1.png"' in resp.read().decode()
+        ok("a file named like a formula exports as text")
 
         print("\nall checks passed")
     finally:
