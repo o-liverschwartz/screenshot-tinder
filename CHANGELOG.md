@@ -2,6 +2,27 @@
 
 Newest first. Dates are the day the work landed.
 
+## 2026-09-30
+
+### Fixed
+
+- Any web page could send requests to the local server. It now refuses any request whose Host or Origin is not itself.
+- Undo could replace a file that had taken the old name. The returned file now comes back as `name 2.png`.
+- Cmd+A threw a file out, Cmd+D kept one, and a held key made a decision per repeat. Cmd, Ctrl, Option and key repeat now do nothing.
+- A recursive scan dropped the queued files under an unreadable subfolder. They stay queued and the folder is reported.
+- A failed undo said "Put 0 back" with no reason. The reason is shown, and a retryable entry stays on the stack.
+- A second copy of the app overwrote the first copy's state. A second launch now exits.
+- Renaming only the case of a name was refused.
+- A failed Finder label was reported as success.
+- One folder or destination without a path broke every scan after it.
+- The kept-list export could hand a spreadsheet a formula.
+- The checks wrote into the real home folder.
+
+### Changed
+
+- Browse opens the normal macOS folder dialog. The in-app folder list is the fallback.
+- The README image is a screenshot of the current app on generated files.
+
 ## 2026-09-02
 
 ### Added
@@ -72,7 +93,7 @@ Grown from 14 checks to 25, covering the quarantine configuration, star modes an
 their undo, folder-list changes, the denied-folder exception, and the
 self-rescanning quarantine case.
 
-## 2026-08-27 — UI refinement pass
+## 2026-08-27 - UI refinement pass
 
 A refinement inside the existing direction: no layout restructured, no feature
 added or removed, no route or function renamed. One file changed,

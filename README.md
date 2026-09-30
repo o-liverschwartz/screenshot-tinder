@@ -1,134 +1,107 @@
-# Screenshot Triage
+# Screenshot Tinder
 
-![Screenshot Triage](docs/card.png)
+I built something that let me swipe through my screenshots like a dating app. One key per screenshot, and nothing is deleted until you confirm.
 
-macOS drops every screenshot on the Desktop and they are never looked at again.
-This is a local reviewer for that pile: one file fills the screen, one keystroke
-decides it, the next one appears.
+The story behind it is at [oliverschwartz.me](https://oliverschwartz.me/screenshot-triage).
 
-A dating app for screenshots, not a file manager.
+![One screenshot on screen, four ways to answer it](docs/review.png)
 
-Python 3, stdlib only. No dependencies, no install step, no network access.
+## Why
 
-## Run it
+Screenshots pile up stupidly fast. I wanted sorting them to be fun.
+
+The normal way: open the dialog, find the folder, click it, confirm. Twenty times. With Screenshot Tinder: C once, then Space.
+
+[Who is it for besides you?]
+
+## An example
+
+Four screenshots on the Desktop. Space is aimed at a folder called Receipts, and star is set to add `-KEEP` to the name. Keys: Space, A, D, W.
 
 ```
+Before   ~/Desktop
+           Screenshot 2026-09-14 at 09.12.03.png
+           Screenshot 2026-09-14 at 09.12.41.png
+           Screenshot 2026-09-15 at 18.02.10.png
+           Screenshot 2026-09-16 at 07.30.55.png
+
+Keys     Space    A      D      W
+
+After    ~/Desktop/Receipts/Screenshot 2026-09-14 at 09.12.03.png
+         ~/.screenshot-triage/quarantine/<id>__Screenshot 2026-09-14 at 09.12.41.png
+         ~/Desktop/Screenshot 2026-09-15 at 18.02.10.png
+         ~/Desktop/Screenshot 2026-09-16 at 07.30.55-KEEP.png
+```
+
+Then Z, and `Screenshot 2026-09-16 at 07.30.55.png` is back on the Desktop under its old name.
+
+## Install and run
+
+macOS and Python 3.9 or newer. Standard library only, nothing to install.
+
+```
+git clone https://github.com/o-liverschwartz/screenshot-tinder.git
+cd screenshot-tinder
 python3 server.py
 ```
 
-Opens `http://127.0.0.1:8765/`, or the next free port above it. The first screen
-picks the folders to review and the folders things can be filed into.
-
-```
-python3 server.py --port 9000 --no-browser
-```
+It opens `http://127.0.0.1:8765/`, or the next free port above it. The first screen asks which folders to review and which folders things can be filed into. Browse opens the normal macOS folder dialog. `--port 9000` and `--no-browser` do what they say.
 
 ## Keys
 
 | Key | What happens |
 | --- | --- |
-| `A` or `←` | Throw out — moves the file to quarantine, never deletes it |
-| `D` or `→` | Keep — the file stays where it is, marked done |
-| `W` or `↑` | Star — keeps it, plus whatever starring is set to do |
-| `S` or `↓` | Rename, without leaving the card |
-| `Space` | File it into the aimed folder |
-| `1`–`9` | Aim at that folder and file this one into it |
-| `C` | Change what `Space` is aimed at |
-| `G` | Open the grid, and again to leave it |
+| `A` or left | Throw out: the file moves to quarantine |
+| `D` or right | Keep: the file stays where it is |
+| `W` or up | Star: keep it, plus a Finder label or a mark in the name |
+| `S` or down | Rename |
+| `Space` | Move it into the folder Space is aimed at |
+| `1` to `9` | Aim Space at that folder and move this one into it |
+| `C` | Change where Space is aimed |
+| `G` | Grid of the oldest 200 waiting files, again to leave |
 | `Z` | Undo |
 | `?` | Every shortcut, on screen |
 
-The card also takes gestures: drag right to keep, left to throw out, up to star.
+Or make a grid and apply batch decisions. Drag across tiles to select, shift-click for a run, and one decision covers the selection.
 
-## Aiming
+Shortcuts ignore Cmd, Ctrl and Option, and a held key makes one decision.
 
-The bar under the card shows where `Space` sends things. Aim once and every
-`Space` after that goes to the same folder, so a run of receipts is five presses
-rather than five menus. `C` or a number key changes it. Destination folders are
-created if they do not exist, and one can be added mid-session.
+## Nothing is deleted until you confirm
 
-## The grid
+- Throw out moves the file to `~/.screenshot-triage/quarantine` (settable in Folders and setup). Empty quarantine sends it to the macOS Trash.
+- Every action undoes with Z, a batch counts as one, and the history survives a restart.
+- A name collision never overwrites. Filing `shot.png` next to another `shot.png` makes `shot 2.png`, and undo does the same if something took the old name.
+- A folder macOS refuses to read is reported as unreadable, not as empty, and its files stay in the queue.
+- No second listener, no account, no upload. The only address it binds is 127.0.0.1, and it refuses any request whose Host or Origin is not itself.
 
-`G` opens every pending file at once. Drag a band across tiles to select them;
-starting the drag on an already-selected tile removes instead of adds, so an
-overshoot is corrected with the same gesture. Holding near the top or bottom edge
-keeps scrolling. Shift-click takes the whole run between two tiles. One decision
-then covers the whole selection, as a single undo step.
+## What it does not do
 
-## What starring does
+- It only runs on a Mac. Finder labels, the folder dialog and the Trash need macOS.
+- It runs one copy at a time. A second launch exits.
+- It does not look inside subfolders unless you tick include subfolders.
+- It does not guess what a screenshot is. [Is that a rule, or just not built yet?]
 
-Star always keeps the file. What else it does is configurable under **Folders and
-setup**:
-
-- **Colour it in Finder** — a Finder label in any of the seven colours. The file
-  itself is untouched, but the mark only exists inside Finder.
-- **Mark the name** — adds text to the filename, at the front or the back, so the
-  mark travels with the file. At the back means before the extension:
-  `shot.png` becomes `shot-KEEP.png`, never `shot.png-KEEP`.
-
-A preview shows what the next star will do to a real filename off the queue.
-`Z` undoes either kind.
-
-## Nothing is deleted
-
-Throwing a file out moves it to a quarantine folder, by default
-`~/.screenshot-triage/quarantine`. Nothing in this app calls `rm`. One button
-moves the whole quarantine to the macOS Trash, still recoverable, and that is the
-only time anything leaves that folder.
-
-Quarantine deliberately defaults outside the app directory. A checkout is not a
-safe place for files the app promises to keep, since `git clean -xfd` ignores
-`.gitignore`. It can be pointed anywhere under **Folders and setup** — the folder
-picker has a **show hidden** toggle so dot folders are reachable, and **Open in
-Finder** goes straight there — and the app flags the choice if it lands somewhere
-a repo command could reach.
-
-Every action is undoable, batches included. `Z` walks back through the history
-and physically returns files to where they came from. The one thing undo will not
-do is pull a file out of the Trash; it says so rather than quietly doing nothing.
-
-## Picking folders
-
-Each suggested folder and each row in the browser shows how many reviewable files
-it actually holds, so the pile is visible before anything is scanned. Clicking a
-folder adds it directly.
-
-Removing a folder from the list removes its files from the queue. The exception is
-a folder macOS refuses to read: an unreadable folder is not evidence its files are
-gone, so those stay queued and the denial is reported as a denial. "Nothing left
-to review" and "I was not allowed to look" are different sentences and the app
-never confuses them. Granting Full Disk Access to the terminal in System Settings
-resolves it.
-
-## Speed
-
-Grid tiles are served as cached 480px thumbnails rather than full-resolution
-originals, roughly a twentieth of the bytes. Images carry an ETag derived from
-each file's own modification time and size, so revisiting a card or redrawing the
-grid does not re-read from disk. The card view prefetches the next few images.
-
-## Checking it still works
+## Check it still works
 
 ```
 python3 test_triage.py
 ```
 
-Twenty-five checks against a temp folder, asserting the things that matter: a name
-collision never overwrites, a thrown-out file is still on disk, changing the folder
-list changes the queue, and undoing everything leaves every file exactly where it
-started.
+It starts its own server against throwaway files in a temp folder and prints `all checks passed`.
 
 ## Layout
 
 ```
-server.py          the backend, stdlib only
+server.py          the backend, standard library only
 static/index.html  the frontend, one file
-test_triage.py     the self-check
-run.sh             the same thing, shorter to type
-docs/card.png      the image above
-data/              local state and thumbnail cache, git ignored
+test_triage.py     the checks
+docs/review.png    the image above
+CHANGELOG.md       what changed, newest first
+data/              local state, git ignored
 ```
 
-## Licence
+## License
 
 MIT. See [LICENSE](LICENSE).
+
+<!-- For GitHub settings, About: description "One key per screenshot. Nothing is deleted until you confirm." / website https://oliverschwartz.me/screenshot-triage / topics python, macos, screenshots, file-management, local-first -->

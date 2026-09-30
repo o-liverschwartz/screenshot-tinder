@@ -27,7 +27,7 @@ env/
 .backup/
 *.log
 
-# Working screenshots. docs/card.png is the only image the repo carries.
+# Working screenshots. docs/review.png is the only image the repo carries.
 docs/refinement-*/
 docs/**/*.png
-!docs/card.png
+!docs/review.png
