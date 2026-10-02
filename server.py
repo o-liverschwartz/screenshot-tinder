@@ -10,18 +10,23 @@ Stdlib only, no dependencies, never talks to the network.
 
     python3 server.py            # opens http://127.0.0.1:8765/
     python3 server.py --port 9000 --no-browser
+    python3 server.py --demo     # generated screenshots in a throwaway folder
 """
 import argparse
 import fcntl
 import json
 import os
+import random
 import shutil
+import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
 import webbrowser
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -1216,19 +1221,138 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+# ---- --demo: generated screenshots in a throwaway folder ----------------------
+# A reviewer can try the app without pointing it at their own Desktop, and the
+# README picture has nobody's real files in it. Plain shapes, no text, stdlib PNG.
+
+def write_png(path, w, h, px):
+    raw = b"".join(b"\0" + bytes(px[y * w * 3:(y + 1) * w * 3]) for y in range(h))
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
+    with open(path, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def demo_screen(kind, rng, w=1440, h=900):
+    px = bytearray(w * h * 3)
+
+    def rect(x, y, rw, rh, c):
+        x, y = max(0, int(x)), max(0, int(y))
+        rw, rh = min(int(rw), w - x), min(int(rh), h - y)
+        if rw <= 0 or rh <= 0:
+            return
+        line = bytes(c) * rw
+        for yy in range(y, y + rh):
+            px[(yy * w + x) * 3:(yy * w + x + rw) * 3] = line
+
+    def circle(cx, cy, r, c):
+        for dy in range(-r, r + 1):
+            half = int((r * r - dy * dy) ** 0.5)
+            rect(cx - half, cy + dy, 2 * half + 1, 1, c)
+
+    grey, ink, white = (225, 225, 228), (120, 124, 132), (255, 255, 255)
+    accent = rng.choice([(66, 120, 220), (220, 90, 70), (60, 160, 110), (230, 170, 50), (150, 100, 210)])
+    if kind == "photo":                                   # sky, sun, two hills
+        top, bottom = (rng.randint(60, 120), rng.randint(120, 170), 230), (250, 200, 160)
+        for y in range(h):
+            t = y / h
+            rect(0, y, w, 1, tuple(int(a + (b - a) * t) for a, b in zip(top, bottom)))
+        circle(rng.randint(300, 1100), rng.randint(180, 320), 70, (255, 230, 150))
+        for base, c in ((620, (90, 140, 100)), (720, (60, 105, 80))):
+            phase = rng.random() * 2
+            for x in range(0, w, 8):                      # a zigzag ridge
+                y = base - int(90 * abs((x / w * 3 + phase) % 2 - 1))
+                rect(x, y, 8, h - y, c)
+        return px
+    rect(0, 0, w, h, (rng.randint(150, 200), rng.randint(160, 200), rng.randint(190, 220)))
+    wx, wy, ww, wh = 120, 80, w - 240, h - 160            # one window on a desktop
+    rect(wx, wy, ww, wh, (30, 32, 38) if kind == "code" else white)
+    rect(wx, wy, ww, 44, (236, 236, 238) if kind != "code" else (44, 46, 54))
+    for i, c in enumerate([(255, 95, 87), (254, 188, 46), (40, 200, 64)]):
+        circle(wx + 26 + i * 22, wy + 22, 7, c)
+    x0, y0 = wx + 60, wy + 90
+    if kind == "doc":
+        rect(x0, y0, rng.randint(300, 520), 26, (40, 40, 48))
+        for i in range(16):
+            rect(x0, y0 + 60 + i * 30, rng.randint(400, ww - 140), 12, grey if i % 5 else ink)
+    elif kind == "chart":
+        rect(x0, y0 + 560, ww - 120, 3, ink); rect(x0, y0, 3, 560, ink)
+        for i in range(10):
+            bh = rng.randint(80, 540)
+            rect(x0 + 30 + i * ((ww - 180) // 10), y0 + 560 - bh, (ww - 180) // 10 - 24, bh, accent)
+    elif kind == "chat":
+        y = y0
+        for i in range(7):
+            bw, mine = rng.randint(220, 560), i % 2 == 1
+            rect(wx + ww - 60 - bw if mine else x0, y, bw, 52, accent if mine else grey)
+            y += 80
+    elif kind == "code":
+        palette = [(198, 120, 221), (152, 195, 121), (97, 175, 239), (229, 192, 123), (171, 178, 191)]
+        for i in range(20):
+            x = x0 + 32 * rng.randint(0, 3)
+            for _ in range(rng.randint(1, 4)):
+                seg = rng.randint(40, 180)
+                rect(x, y0 + i * 28, seg, 12, rng.choice(palette)); x += seg + 12
+    else:                                                 # a sheet of cells
+        cw, ch = (ww - 120) // 8, 40
+        for r in range(14):
+            for col in range(8):
+                fill = accent if rng.random() < 0.08 else (white if r else (240, 240, 244))
+                rect(x0 + col * cw, y0 + r * ch, cw - 2, ch - 2, fill)
+                if r and fill == white and rng.random() < 0.7:
+                    rect(x0 + col * cw + 10, y0 + r * ch + 14, rng.randint(30, cw - 30), 10, grey)
+    return px
+
+
+def make_demo_screenshots(folder, count=12):
+    os.makedirs(folder, exist_ok=True)
+    kinds = ["doc", "chart", "chat", "code", "photo", "sheet"]
+    day0 = time.mktime(time.localtime(time.time() - count * 86400)[:3] + (0, 0, 0, 0, 0, -1))
+    for i in range(count):
+        when = day0 + i * 86400 + 3600 * (9 + i % 9) + 60 * (7 * i % 60) + 13 * i % 60
+        name = time.strftime("Screenshot %Y-%m-%d at %H.%M.%S.png", time.localtime(when))
+        path = os.path.join(folder, name)
+        write_png(path, 1440, 900, demo_screen(kinds[i % len(kinds)], random.Random(i)))
+        os.utime(path, (when, when))
+
+
+def start_demo():
+    """Everything the demo touches lives in one temp folder, HOME included, so the
+    real state, quarantine, thumbnail cache and Desktop are never read or written."""
+    global DATA_DIR, STATE_FILE, THUMB_DIR, STATE
+    root = tempfile.mkdtemp(prefix="screenshot-tinder-demo-")
+    os.environ["HOME"] = root
+    desk = os.path.join(root, "Desktop")
+    make_demo_screenshots(desk)
+    DATA_DIR = os.path.join(root, "data")
+    os.makedirs(DATA_DIR)
+    STATE_FILE = os.path.join(DATA_DIR, "state.json")
+    THUMB_DIR = os.path.join(root, "thumbs")
+    STATE = migrate_state({"config": dict(DEFAULT_CONFIG, quarantine=os.path.join(root, "quarantine")),
+                           "items": {}, "history": []})
+    dests = [{"path": os.path.join(desk, n), "label": n} for n in ("Receipts", "Work", "Keep")]
+    run_scan(dict(STATE["config"], folders=[{"path": desk}], destinations=dests, armed=dests[0]["path"]))
+    return root
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Local keyboard-driven file triage.")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--demo", action="store_true",
+                        help="try it on generated screenshots in a throwaway folder")
+    args = parser.parse_args()
+    if args.demo:
+        print(f"Demo folder        {start_demo()}")
+
     # Two copies would each hold their own STATE and overwrite data/state.json, and
     # the port fallback below would hide that. Ceiling: flock is POSIX, and this
-    # app already needs macOS for Finder and the Trash.
+    # app already needs macOS for Finder and the Trash. A demo has its own data/.
     lock = open(os.path.join(DATA_DIR, "server.lock"), "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         sys.exit("Already running. Two copies would overwrite each other's state.")
-    parser = argparse.ArgumentParser(description="Local keyboard-driven file triage.")
-    parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--no-browser", action="store_true")
-    args = parser.parse_args()
 
     port, server = args.port, None
     for _ in range(10):

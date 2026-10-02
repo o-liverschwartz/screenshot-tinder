@@ -353,6 +353,25 @@ def main():
             assert call(base, "/api/pick-folder", {"start": src}) == {"path": dest}
             ok("browse hands back the folder picked in the macOS dialog")
 
+        # --demo runs next to a real copy, on its own generated files and state
+        dport = free_port()
+        demo = subprocess.Popen([sys.executable, "server.py", "--demo", "--port", str(dport), "--no-browser"],
+                                cwd=app, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(50):
+                try:
+                    d = call(f"http://127.0.0.1:{dport}", "/api/state"); break
+                except Exception:
+                    time.sleep(0.1)
+            else:
+                raise SystemExit("demo never came up")
+            assert d["queue_total"] == 12, d["queue_total"]
+            assert not d["config"]["folders"][0]["path"].startswith(home), d["config"]["folders"]
+            assert call(base, "/api/state")["queue_total"] != 12, "the demo leaked into the real state"
+        finally:
+            demo.terminate(); demo.wait(timeout=5)
+        ok("--demo starts on twelve generated screenshots, away from real state")
+
         # undo must never replace a file that took the old name
         put(f"{t2}/shot.png", b"ORIGINAL")
         iid = scan2()["queue"][0]["id"]
