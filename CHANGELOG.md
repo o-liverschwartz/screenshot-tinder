@@ -2,6 +2,17 @@
 
 Newest first. Dates are the day the work landed.
 
+## 2026-10-02
+
+### Added
+
+- `python3 server.py --demo` starts on twelve generated screenshots in a temp folder, with its own state, quarantine and thumbnails.
+
+### Changed
+
+- The README image is retaken from `--demo`.
+- Paths under your home folder show as `~` wherever home is, not only under `/Users`.
+
 ## 2026-09-30
 
 ### Fixed
@@ -21,7 +32,7 @@ Newest first. Dates are the day the work landed.
 ### Changed
 
 - Browse opens the normal macOS folder dialog. The in-app folder list is the fallback.
-- The README image is a screenshot of the current app on generated files.
+- The README image is a screenshot of the current app, replacing an old one with a stock photo in it.
 
 ## 2026-09-02
 
@@ -31,7 +42,7 @@ Newest first. Dates are the day the work landed.
   under *Folders and setup*, validated for existence and write access before it
   is accepted. It defaults to `~/.screenshot-triage/quarantine`.
 - **Configurable star.** `W` still always keeps the file; what else it does is a
-  choice between a Finder label in any of the seven colours and a mark added to
+  choice between a Finder label in any of the seven colors and a mark added to
   the filename, at the front or the back. A preview shows the result against a
   real filename from the queue. The rename path reuses the existing rename
   operation, so undo handled it without new code.
@@ -146,4 +157,4 @@ added or removed, no route or function renamed. One file changed,
   has no business inside them.
 - The `include subfolders` checkbox appearing both below the add row and on each
   added row. Genuinely confusing, but the two mean different things and changing
-  either would change behaviour.
+  either would change behavior.
