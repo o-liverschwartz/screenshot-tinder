@@ -1,8 +1,8 @@
 # Screenshot Tinder
 
-I built something that let me swipe through my screenshots like a dating app. One key per screenshot, and nothing is deleted until you confirm.
+[Oliver: Screenshot Tinder or Screenshot Triage? The repo and the site say Tinder, the app window and the folder names say triage.]
 
-The story behind it is at [oliverschwartz.me](https://oliverschwartz.me/screenshot-triage).
+The annoying image pile that never stops. Turned into a dating app. One key per screenshot, and nothing is deleted until you confirm. The story behind it is at [oliverschwartz.me](https://oliverschwartz.me/screenshot-triage).
 
 ![One screenshot on screen, four ways to answer it](docs/review.png)
 
@@ -10,9 +10,9 @@ The story behind it is at [oliverschwartz.me](https://oliverschwartz.me/screensh
 
 Screenshots pile up stupidly fast. I wanted sorting them to be fun.
 
-The normal way: open the dialog, find the folder, click it, confirm. Twenty times. With Screenshot Tinder: C once, then Space.
+In Finder it is open the folder, drag, confirm, twenty times. Here you press C once to aim at a folder, then Space for every screenshot that goes there.
 
-[Who is it for besides you?]
+[Oliver: who is it for besides you?]
 
 ## An example
 
@@ -47,6 +47,14 @@ python3 server.py
 
 It opens `http://127.0.0.1:8765/`, or the next free port above it. The first screen asks which folders to review and which folders things can be filed into. Browse opens the normal macOS folder dialog. `--port 9000` and `--no-browser` do what they say.
 
+To try it without pointing it at your own Desktop:
+
+```
+python3 server.py --demo
+```
+
+That makes twelve plain generated screenshots in a temp folder and starts on them. Its state, quarantine and thumbnails stay in that folder too, so your real ones are never touched. The picture above is the demo.
+
 ## Keys
 
 | Key | What happens |
@@ -72,14 +80,14 @@ Shortcuts ignore Cmd, Ctrl and Option, and a held key makes one decision.
 - Every action undoes with Z, a batch counts as one, and the history survives a restart.
 - A name collision never overwrites. Filing `shot.png` next to another `shot.png` makes `shot 2.png`, and undo does the same if something took the old name.
 - A folder macOS refuses to read is reported as unreadable, not as empty, and its files stay in the queue.
-- No second listener, no account, no upload. The only address it binds is 127.0.0.1, and it refuses any request whose Host or Origin is not itself.
+- It listens on 127.0.0.1 only and refuses any request whose Host or Origin is not itself. No account, no upload.
 
 ## What it does not do
 
 - It only runs on a Mac. Finder labels, the folder dialog and the Trash need macOS.
 - It runs one copy at a time. A second launch exits.
 - It does not look inside subfolders unless you tick include subfolders.
-- It does not guess what a screenshot is. [Is that a rule, or just not built yet?]
+- It does not guess what a screenshot is. [Oliver: is that a rule, or just not built yet?]
 
 ## Check it still works
 
@@ -95,13 +103,13 @@ It starts its own server against throwaway files in a temp folder and prints `al
 server.py          the backend, standard library only
 static/index.html  the frontend, one file
 test_triage.py     the checks
-docs/review.png    the image above
+docs/review.png    the image above, taken from --demo
 CHANGELOG.md       what changed, newest first
 data/              local state, git ignored
 ```
 
+[Oliver: say here how you used AI to build this, or leave it out?]
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-<!-- For GitHub settings, About: description "One key per screenshot. Nothing is deleted until you confirm." / website https://oliverschwartz.me/screenshot-triage / topics python, macos, screenshots, file-management, local-first -->
