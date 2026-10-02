@@ -1,7 +1,5 @@
 # Screenshot Tinder
 
-[Oliver: Screenshot Tinder or Screenshot Triage? The repo and the site say Tinder, the app window and the folder names say triage.]
-
 The annoying image pile that never stops. Turned into a dating app. One key per screenshot, and nothing is deleted until you confirm. The story behind it is at [oliverschwartz.me](https://oliverschwartz.me/screenshot-triage).
 
 ![One screenshot on screen, four ways to answer it](docs/review.png)
@@ -11,8 +9,6 @@ The annoying image pile that never stops. Turned into a dating app. One key per 
 Screenshots pile up stupidly fast. I wanted sorting them to be fun.
 
 In Finder it is open the folder, drag, confirm, twenty times. Here you press C once to aim at a folder, then Space for every screenshot that goes there.
-
-[Oliver: who is it for besides you?]
 
 ## An example
 
@@ -87,7 +83,7 @@ Shortcuts ignore Cmd, Ctrl and Option, and a held key makes one decision.
 - It only runs on a Mac. Finder labels, the folder dialog and the Trash need macOS.
 - It runs one copy at a time. A second launch exits.
 - It does not look inside subfolders unless you tick include subfolders.
-- It does not guess what a screenshot is. [Oliver: is that a rule, or just not built yet?]
+- It does not guess what a screenshot is.
 
 ## Check it still works
 
@@ -107,8 +103,6 @@ docs/review.png    the image above, taken from --demo
 CHANGELOG.md       what changed, newest first
 data/              local state, git ignored
 ```
-
-[Oliver: say here how you used AI to build this, or leave it out?]
 
 ## License
 
