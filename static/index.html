@@ -872,7 +872,9 @@ let stageKey = null;
 
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const base = (p) => p.replace(/\/+$/,'').split('/').pop() || p;
-const tilde = (p) => p.replace(/^\/Users\/[^/]+/, '~');
+// The server says where home is. A home outside /Users (or --demo's) still reads as ~.
+let homeDir = '';
+const tilde = (p) => homeDir && (p === homeDir || p.startsWith(homeDir + '/')) ? '~' + p.slice(homeDir.length) : p;
 function size(n){ const u=['B','KB','MB','GB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++;} return (i?n.toFixed(1):n.toFixed(0))+' '+u[i]; }
 // One reading of the date, not two. "21 days ago, Aug 6, 2026" said the same
 // thing twice and ate the room the path needed.
@@ -904,6 +906,7 @@ const tally = (c, capped) => c === null ? 'unreadable' : c === 0 ? '' : (capped 
 
 async function loadChips() {
   const d = await (await fetch('/api/suggestions?types=' + typeParam())).json();
+  if (d.home) homeDir = d.home;
   if (d.quarantine) { quarantinePath = d.quarantine; $('quar').value = quarantinePath;
     $('vault-path').textContent = tilde(quarantinePath);
     appDir = d.app_dir; defaultQuarantine = d.default_quarantine; drawQuarNote(); }
